@@ -6,7 +6,6 @@ import { AppProvider, useApp } from '@/contexts/AppContext';
 import { Sidebar } from '@/components/Sidebar';
 import { TopBar } from '@/components/TopBar';
 import { AIAssistantPanel } from '@/components/AIAssistantPanel';
-import { DatabaseSeedingPanel } from '@/components/DatabaseSeedingPanel';
 import { Toaster } from '@/components/ui/sonner';
 import { PageSkeleton } from '@/components/PageSkeleton';
 
@@ -102,7 +101,6 @@ function AppShell({ children }: { children: React.ReactNode }) {
         currentModule={currentPage.split('/')[0]}
       />
 
-      <DatabaseSeedingPanel />
       <Toaster position="bottom-right" />
     </div>
   );
