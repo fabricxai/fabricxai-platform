@@ -617,6 +617,27 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
     },
   ];
 
+  // MARBIM drafts a priced quote for this RFQ → lands in the Approve inbox.
+  const handleDraftQuote = async (rfqId: string) => {
+    toast.loading('MARBIM is drafting a quote…', { id: 'draft-quote' });
+    try {
+      const res = await fetch('/api/rfq/draft-quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rfqId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Draft failed');
+      toast.success(
+        `Quote drafted — FOB ${json.draft.currency ?? 'USD'} ${json.draft.fob_price}. Review it in Approve.`,
+        { id: 'draft-quote' },
+      );
+      router.push('/approve');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Draft failed', { id: 'draft-quote' });
+    }
+  };
+
   const handleRowClick = (record: any) => {
     setSelectedRecord(record);
     // Use premium RFQ drawer for RFQ records
@@ -5014,6 +5035,7 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
         onRFQUpdated={handleRFQUpdated}
         onAskMarbim={onAskMarbim}
         onOpenAI={onOpenAI}
+        onDraftQuote={selectedRFQ?._raw ? () => handleDraftQuote(selectedRFQ._raw.id) : undefined}
       />
 
       {/* Quote Scenario Detail Drawer */}

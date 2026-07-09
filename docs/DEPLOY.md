@@ -1,5 +1,16 @@
 # Deploy — Vercel + GitHub
 
+> **STATUS (2026-07-09): LIVE.** Project `fab's projects/fabricxai-platform` — linked, all env vars
+> set (prod/preview/dev), GitHub `fabricxai/fabricxai-platform` connected (auto-deploy on push),
+> production deployed → **https://fabricxai-platform.vercel.app** (verified: /login 200, APIs 401).
+>
+> **Remaining (you, DNS):** attach `platform.fabricxai.com` — Vercel dashboard → project → Settings →
+> Domains → add `platform.fabricxai.com`; it shows a CNAME (`cname.vercel-dns.com`) to set at your
+> registrar. Then add `https://platform.fabricxai.com/**` + `https://*.vercel.app/**` to Supabase →
+> Auth → Redirect URLs (so email-confirmation signup works on the deployed site; the seeded
+> password login already works).
+
+
 Hosting: **Vercel** (native Next.js, no Docker). Source: **github.com/fabricxai/fabricxai-platform**.
 Data/auth stays on **managed Supabase** (`aqnrnbdnhekkbimaoewp`). Domain: **platform.fabricxai.com**.
 

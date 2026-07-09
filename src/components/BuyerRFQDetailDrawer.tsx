@@ -41,6 +41,8 @@ interface BuyerRFQDetailDrawerProps {
   rfq: any;
   onAskMarbim?: (prompt: string) => void;
   onOpenAI?: () => void;
+  /** MARBIM drafts a priced quote for this RFQ (queued for approval). */
+  onDraftQuote?: () => void;
 }
 
 export function BuyerRFQDetailDrawer({ 
@@ -48,7 +50,8 @@ export function BuyerRFQDetailDrawer({
   onClose, 
   rfq,
   onAskMarbim,
-  onOpenAI
+  onOpenAI,
+  onDraftQuote
 }: BuyerRFQDetailDrawerProps) {
   const [activeTab, setActiveTab] = useState('overview');
   const [quoteItems, setQuoteItems] = useState([
@@ -330,6 +333,16 @@ export function BuyerRFQDetailDrawer({
 
                 {/* Action Buttons */}
                 <div className="flex items-start gap-2 ml-6">
+                  {onDraftQuote && (
+                    <Button
+                      size="sm"
+                      className="bg-gradient-to-r from-[#EAB308] to-[#57ACAF] text-black border-none hover:opacity-90 shadow-lg shadow-[#EAB308]/20"
+                      onClick={onDraftQuote}
+                    >
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Draft quote with MARBIM
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     className="bg-gradient-to-r from-[#57ACAF] to-[#57ACAF]/80 text-white border-none hover:from-[#57ACAF]/90 hover:to-[#57ACAF]/70 shadow-lg shadow-[#57ACAF]/20"
