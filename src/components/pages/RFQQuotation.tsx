@@ -12,7 +12,7 @@ import { QuoteScenarioDetailDrawer } from '../QuoteScenarioDetailDrawer';
 import { UploadRFQDrawer } from '../UploadRFQDrawer';
 import { CreateScenarioDrawer } from '../CreateScenarioDrawer';
 import { useDatabase, MODULE_NAMES, canPerformAction } from '../../utils/supabase';
-import { useRfqs, type Rfq } from '@/lib/data/rfqs';
+import { useRfqs, clearDemoData, type Rfq } from '@/lib/data/rfqs';
 import { useRouter } from 'next/navigation';
 import { 
   FileText, TrendingUp, AlertTriangle, CheckCircle2, Eye, Edit, Search,
@@ -612,6 +612,18 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
       },
     },
   ];
+
+  const hasDemoData = liveRfqs.some((r) => r.is_demo);
+  const handleClearDemo = async () => {
+    toast.loading('Clearing demo data…', { id: 'clear-demo' });
+    try {
+      await clearDemoData();
+      await refreshRfqs();
+      toast.success('Demo data cleared.', { id: 'clear-demo' });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to clear demo data', { id: 'clear-demo' });
+    }
+  };
 
   // MARBIM drafts a priced quote for this RFQ → lands in the Approve inbox.
   const handleDraftQuote = async (rfqId: string) => {
@@ -5005,6 +5017,25 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
         breadcrumbs={getBreadcrumbs()}
         aiInsightsCount={5}
       >
+        {hasDemoData && (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-[#EAB308]/30 bg-[#EAB308]/10 px-4 py-3">
+            <div className="flex items-center gap-2 text-sm text-[#EAB308]">
+              <Sparkles className="w-4 h-4" />
+              <span>
+                <span className="font-medium">Demo data</span> — these RFQs, buyers and quotes are
+                sample records to explore the platform.
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleClearDemo}
+              className="border-[#EAB308]/40 text-[#EAB308] hover:bg-[#EAB308]/10 shrink-0"
+            >
+              Clear demo data
+            </Button>
+          </div>
+        )}
         {renderContent()}
       </PageLayout>
 

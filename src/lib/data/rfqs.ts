@@ -17,10 +17,20 @@ export interface Rfq {
   deadline: string | null;
   status: 'open' | 'quoted' | 'won' | 'lost' | 'cancelled';
   source: 'manual' | 'ai_extracted';
+  is_demo: boolean;
   notes: string | null;
   created_at: string;
   updated_at: string;
   buyer?: { company_name: string } | null;
+}
+
+/** Delete all demo-flagged rows for the company (RLS-scoped). */
+export async function clearDemoData() {
+  const supabase = createClient();
+  // quotes first (FK to rfqs), then rfqs, then buyers.
+  await supabase.from('quotes').delete().eq('is_demo', true);
+  await supabase.from('rfqs').delete().eq('is_demo', true);
+  await supabase.from('buyers').delete().eq('is_demo', true);
 }
 
 export interface Quote {

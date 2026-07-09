@@ -48,10 +48,10 @@ const byName = Object.fromEntries(buyers.map((b) => [b.company_name, b.id]));
 const rfqs = await rest('rfqs', {
   method: 'POST',
   body: JSON.stringify([
-    { company_id: companyId, buyer_id: byName['H&M'], title: '5,000 organic cotton tees', product_type: 't-shirt', description: '180 GSM organic cotton, 4 colors, S–XXL, OEKO-TEX', quantity: 5000, unit: 'pcs', target_price: 4.2, currency: 'USD', deadline: '2026-09-15', status: 'open', created_by: createdBy },
-    { company_id: companyId, buyer_id: byName['Inditex (Zara)'], title: '12,000 denim jackets', product_type: 'denim jacket', description: '12oz denim, washed, metal trims, S–XL', quantity: 12000, unit: 'pcs', target_price: 18.5, currency: 'USD', deadline: '2026-10-01', status: 'quoted', created_by: createdBy },
-    { company_id: companyId, buyer_id: byName['Uniqlo'], title: '8,000 fleece hoodies', product_type: 'hoodie', description: '320 GSM brushed fleece, kangaroo pocket, 3 colors', quantity: 8000, unit: 'pcs', target_price: 9.75, currency: 'USD', deadline: '2026-09-30', status: 'open', created_by: createdBy },
-    { company_id: companyId, buyer_id: byName['H&M'], title: '3,000 pique polo shirts', product_type: 'polo', description: '200 GSM cotton pique, embroidered logo', quantity: 3000, unit: 'pcs', target_price: 6.4, currency: 'USD', deadline: '2026-08-20', status: 'won', created_by: createdBy },
+    { company_id: companyId, buyer_id: byName['H&M'], title: '5,000 organic cotton tees', product_type: 't-shirt', description: '180 GSM organic cotton, 4 colors, S–XXL, OEKO-TEX', quantity: 5000, unit: 'pcs', target_price: 4.2, currency: 'USD', deadline: '2026-09-15', status: 'open', created_by: createdBy, is_demo: true },
+    { company_id: companyId, buyer_id: byName['Inditex (Zara)'], title: '12,000 denim jackets', product_type: 'denim jacket', description: '12oz denim, washed, metal trims, S–XL', quantity: 12000, unit: 'pcs', target_price: 18.5, currency: 'USD', deadline: '2026-10-01', status: 'quoted', created_by: createdBy, is_demo: true },
+    { company_id: companyId, buyer_id: byName['Uniqlo'], title: '8,000 fleece hoodies', product_type: 'hoodie', description: '320 GSM brushed fleece, kangaroo pocket, 3 colors', quantity: 8000, unit: 'pcs', target_price: 9.75, currency: 'USD', deadline: '2026-09-30', status: 'open', created_by: createdBy, is_demo: true },
+    { company_id: companyId, buyer_id: byName['H&M'], title: '3,000 pique polo shirts', product_type: 'polo', description: '200 GSM cotton pique, embroidered logo', quantity: 3000, unit: 'pcs', target_price: 6.4, currency: 'USD', deadline: '2026-08-20', status: 'won', created_by: createdBy, is_demo: true },
   ]),
 });
 const denim = rfqs.find((r) => r.title.includes('denim'));
