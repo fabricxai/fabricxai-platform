@@ -13,6 +13,11 @@ import { UploadRFQDrawer } from '../UploadRFQDrawer';
 import { CreateScenarioDrawer } from '../CreateScenarioDrawer';
 import { useDatabase, MODULE_NAMES, canPerformAction } from '../../utils/supabase';
 import { useRfqs, useQuotes, clearDemoData, type Rfq, type QuoteWithRfq } from '@/lib/data/rfqs';
+import { useClarifications } from '@/lib/data/clarifications';
+import { createClarification, answerClarification } from '@/app/actions/clarifications';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
+import { Textarea } from '../ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { useRouter } from 'next/navigation';
 import { 
   FileText, TrendingUp, AlertTriangle, CheckCircle2, Eye, Edit, Search,
@@ -363,7 +368,34 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
   // Live RFQs from Supabase (RLS-scoped to the company). Replaces localStorage seed.
   const { data: liveRfqs, loading: rfqsLoading, refresh: refreshRfqs } = useRfqs();
   const { data: quotes, loading: quotesLoading } = useQuotes();
+  const { data: clarifications, loading: clarLoading, refresh: refreshClarifications } = useClarifications();
   const router = useRouter();
+
+  // Clarification dialogs
+  const [newClarOpen, setNewClarOpen] = useState(false);
+  const [newClarRfqId, setNewClarRfqId] = useState('');
+  const [newClarQuestion, setNewClarQuestion] = useState('');
+  const [answerClarId, setAnswerClarId] = useState<string | null>(null);
+  const [answerText, setAnswerText] = useState('');
+
+  const submitClarification = async () => {
+    const res = await createClarification(newClarRfqId, newClarQuestion);
+    if (!res.ok) return toast.error(res.error);
+    toast.success('Clarification raised.');
+    setNewClarOpen(false);
+    setNewClarRfqId('');
+    setNewClarQuestion('');
+    await refreshClarifications();
+  };
+  const submitAnswer = async () => {
+    if (!answerClarId) return;
+    const res = await answerClarification(answerClarId, answerText);
+    if (!res.ok) return toast.error(res.error);
+    toast.success('Clarification answered.');
+    setAnswerClarId(null);
+    setAnswerText('');
+    await refreshClarifications();
+  };
   
   // UI State
   const [currentView, setCurrentView] = useState<string>(initialSubPage);
@@ -2273,876 +2305,177 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
     );
   };
 
-  const renderClarificationTracker = () => (
-    <>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-white mb-1">Clarification Tracker</h2>
-          <p className="text-sm text-[#6F83A7]">Tracks pending and resolved clarification items across buyers and RFQs</p>
-        </div>
-        <div className="flex gap-3">
-          <Button variant="outline" className="border-white/10">
-            <Filter className="w-4 h-4 mr-2" />
-            Filter
-          </Button>
-          <Button className="bg-[#EAB308] hover:bg-[#EAB308]/90 text-black">
-            <Plus className="w-4 h-4 mr-2" />
-            Send Clarification
-          </Button>
+  const renderClarificationTracker = () => {
+    const openClar = clarifications.filter((c) => c.status === 'open');
+    const answeredClar = clarifications.filter((c) => c.status === 'answered');
+
+    const ClarCard = ({ c }: { c: (typeof clarifications)[number] }) => (
+      <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs text-[#6F83A7]">
+              {c.rfq?.title ?? 'RFQ'}
+              {c.rfq?.buyer?.company_name ? ` · ${c.rfq.buyer.company_name}` : ''}
+            </div>
+            <p className="text-white mt-1 break-words">{c.question}</p>
+            {c.answer && (
+              <p className="mt-2 text-sm text-[#57ACAF]">
+                <span className="text-[#6F83A7]">Answer:</span> {c.answer}
+              </p>
+            )}
+          </div>
+          {c.status === 'open' ? (
+            <Button
+              size="sm"
+              onClick={() => {
+                setAnswerClarId(c.id);
+                setAnswerText('');
+              }}
+              className="bg-[#EAB308] hover:bg-[#EAB308]/90 text-black shrink-0"
+            >
+              Answer
+            </Button>
+          ) : (
+            <Badge className="bg-[#57ACAF]/15 text-[#57ACAF] shrink-0">Answered</Badge>
+          )}
         </div>
       </div>
+    );
 
-      <Tabs defaultValue="open-clarifications" className="space-y-6">
-        {/* Tab Navigation */}
-        <div className="relative bg-gradient-to-r from-white/5 via-white/10 to-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-1.5 mb-6 shadow-lg shadow-black/20">
-          <TabsList className="w-full grid grid-cols-4 bg-transparent gap-1.5 p-0 h-auto">
-            <TabsTrigger 
-              value="open-clarifications" 
-              className="relative flex items-center justify-center gap-2.5 py-3.5 px-4 bg-white/5 hover:bg-white/10 data-[state=active]:bg-gradient-to-br data-[state=active]:from-[#EAB308] data-[state=active]:to-[#EAB308]/80 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-[#EAB308]/30 text-[#6F83A7] data-[state=active]:font-medium rounded-xl transition-all duration-300 group"
-            >
-              <AlertCircle className="w-4 h-4 group-data-[state=active]:scale-110 transition-transform" />
-              <span className="text-xs">Open Clarifications</span>
-            </TabsTrigger>
-            <TabsTrigger 
-              value="resolved-clarifications" 
-              className="relative flex items-center justify-center gap-2.5 py-3.5 px-4 bg-white/5 hover:bg-white/10 data-[state=active]:bg-gradient-to-br data-[state=active]:from-[#EAB308] data-[state=active]:to-[#EAB308]/80 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-[#EAB308]/30 text-[#6F83A7] data-[state=active]:font-medium rounded-xl transition-all duration-300 group"
-            >
-              <CheckCircle2 className="w-4 h-4 group-data-[state=active]:scale-110 transition-transform" />
-              <span className="text-xs">Resolved Clarifications</span>
-            </TabsTrigger>
-            <TabsTrigger 
-              value="buyer-response-logs" 
-              className="relative flex items-center justify-center gap-2.5 py-3.5 px-4 bg-white/5 hover:bg-white/10 data-[state=active]:bg-gradient-to-br data-[state=active]:from-[#EAB308] data-[state=active]:to-[#EAB308]/80 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-[#EAB308]/30 text-[#6F83A7] data-[state=active]:font-medium rounded-xl transition-all duration-300 group"
-            >
-              <MessageSquare className="w-4 h-4 group-data-[state=active]:scale-110 transition-transform" />
-              <span className="text-xs">Buyer Response Logs</span>
-            </TabsTrigger>
-            <TabsTrigger 
-              value="ai-insights" 
-              className="relative flex items-center justify-center gap-2.5 py-3.5 px-4 bg-white/5 hover:bg-white/10 data-[state=active]:bg-gradient-to-br data-[state=active]:from-[#EAB308] data-[state=active]:to-[#EAB308]/80 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-[#EAB308]/30 text-[#6F83A7] data-[state=active]:font-medium rounded-xl transition-all duration-300 group"
-            >
-              <Sparkles className="w-4 h-4 group-data-[state=active]:scale-110 transition-transform" />
-              <span className="text-xs">AI Insights</span>
-            </TabsTrigger>
-          </TabsList>
-        </div>
-
-        <TabsContent value="open-clarifications" className="space-y-6">
-          {/* KPI Cards Row */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="p-5 rounded-xl bg-gradient-to-br from-[#EAB308]/10 to-[#EAB308]/5 border border-[#EAB308]/20">
-              <div className="flex items-center gap-3 mb-2">
-                <AlertCircle className="w-5 h-5 text-[#EAB308]" />
-                <div className="text-[#6F83A7] text-sm">Open Clarifications</div>
-              </div>
-              <div className="text-3xl text-white mb-1">5</div>
-              <div className="text-xs text-[#6F83A7]">Pending buyer response</div>
-            </div>
-            <div className="p-5 rounded-xl bg-gradient-to-br from-[#D0342C]/10 to-[#D0342C]/5 border border-[#D0342C]/20">
-              <div className="flex items-center gap-3 mb-2">
-                <Clock className="w-5 h-5 text-[#D0342C]" />
-                <div className="text-[#6F83A7] text-sm">Overdue</div>
-              </div>
-              <div className="text-3xl text-[#D0342C] mb-1">2</div>
-              <div className="text-xs text-[#6F83A7]">Requires follow-up</div>
-            </div>
-            <div className="p-5 rounded-xl bg-gradient-to-br from-[#57ACAF]/10 to-[#57ACAF]/5 border border-[#57ACAF]/20">
-              <div className="flex items-center gap-3 mb-2">
-                <Activity className="w-5 h-5 text-[#57ACAF]" />
-                <div className="text-[#6F83A7] text-sm">Avg Response Time</div>
-              </div>
-              <div className="text-3xl text-white mb-1">1.2d</div>
-              <div className="text-xs text-[#57ACAF]">18% improvement</div>
-            </div>
-            <div className="p-5 rounded-xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10">
-              <div className="flex items-center gap-3 mb-2">
-                <CheckCircle2 className="w-5 h-5 text-white" />
-                <div className="text-[#6F83A7] text-sm">Resolution Rate</div>
-              </div>
-              <div className="text-3xl text-white mb-1">92%</div>
-              <div className="text-xs text-[#6F83A7]">Successfully resolved</div>
-            </div>
-          </div>
-
-          {/* AI Priority Intelligence Card */}
-          <div className="p-6 rounded-xl bg-gradient-to-br from-[#EAB308]/10 to-[#EAB308]/5 border border-[#EAB308]/20">
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-3 flex-1">
-                <div className="w-10 h-10 rounded-lg bg-[#EAB308]/20 flex items-center justify-center flex-shrink-0">
-                  <Sparkles className="w-5 h-5 text-[#EAB308]" />
-                </div>
-                <div className="flex-1">
-                  <h4 className="text-white mb-2">AI Clarification Priority Intelligence</h4>
-                  <p className="text-sm text-[#6F83A7] mb-3">
-                    MARBIM has analyzed <span className="text-[#EAB308]">5 open clarifications</span> including <span className="text-[#D0342C]">2 overdue items</span>. 
-                    Auto-drafted clarification requests available for all pending items with <span className="text-[#57ACAF]">94% buyer acceptance rate</span>. 
-                    Critical high-value RFQs flagged for priority escalation.
-                  </p>
-                  <div className="grid grid-cols-4 gap-3">
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">High Priority</div>
-                      <div className="text-lg text-[#D0342C]">2</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">Auto-Drafted</div>
-                      <div className="text-lg text-[#57ACAF]">5</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">Pending Days</div>
-                      <div className="text-lg text-white">1.8</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">Est. Impact</div>
-                      <div className="text-lg text-[#EAB308]">$128K</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <MarbimAIButton
-                marbimPrompt="Analyze open clarification requests and provide strategic recommendations. Current state: 5 open clarifications (2 overdue >3 days, 3 pending <2 days), total RFQ value at risk: $128K, average response time: 1.2 days (18% improvement vs baseline), 92% resolution rate, 5 auto-drafted messages ready. Critical items: 2 high-value RFQs from H&M ($45K) and Gap ($38K) both overdue. Provide: 1) Prioritized action plan for overdue clarifications with escalation strategy, 2) Root cause analysis of delays and buyer response patterns, 3) Optimized follow-up timing based on buyer-specific behavior, 4) Communication templates and tone recommendations per buyer relationship strength, 5) Impact analysis of clarification delays on quote submission timelines and win probability, 6) Process improvements to reduce clarification rate from current 12% baseline, 7) Buyer education strategy to improve RFQ submission completeness, 8) Risk mitigation for high-value at-risk RFQs."
-                onAskMarbim={onAskMarbim}
-                size="sm"
-              />
-            </div>
-          </div>
-
-          {/* Open Clarifications Table */}
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <h3 className="text-white mb-1">Open Clarification Requests</h3>
-                <p className="text-sm text-[#6F83A7]">Active clarifications awaiting buyer response</p>
-              </div>
-              <MarbimAIButton
-                marbimPrompt="Analyze individual open clarification items for optimization. Breakdown: CLR-2024-421 (H&M, GSM specification, pending 1 day, high value $45K), CLR-2024-422 (ACME Fashion, wash test method, OVERDUE 3 days, medium value $22K), CLR-2024-423 (Gap, label placement, pending 1 day, high value $38K). Buyer response patterns: H&M typically responds in 0.8 days (excellent), ACME in 3.8 days (very slow - red flag), Gap in 1.4 days (good). Provide: 1) Item-by-item analysis with recommended actions and urgency levels, 2) Buyer-specific communication strategies based on relationship history, 3) Optimal send times and follow-up cadences per buyer, 4) Escalation triggers and paths for unresponsive buyers, 5) Alternative approaches if clarification remains unresolved, 6) Impact on quote submission deadlines and mitigation strategies, 7) Draft follow-up messages with appropriate tone per buyer."
-                onAskMarbim={onAskMarbim}
-                size="sm"
-              />
-            </div>
-            <SmartTable
-              columns={openClarificationsColumns}
-              data={[]}
-              searchPlaceholder="Search clarifications..."
-              onRowClick={handleRowClick}
-            />
-          </div>
-
-          {/* Analytics Grid */}
-          <div className="grid grid-cols-2 gap-6">
-            {/* Overdue Items Analysis */}
-            <div className="p-6 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h4 className="text-white mb-1 flex items-center gap-2">
-                    <AlertTriangle className="w-5 h-5 text-[#D0342C]" />
-                    Overdue Clarification Impact
-                  </h4>
-                  <p className="text-sm text-[#6F83A7]">Risk analysis for delayed responses</p>
-                </div>
-                <MarbimAIButton
-                  marbimPrompt="Analyze overdue clarification items and quantify business impact. Current overdue items: 2 clarifications (CLR-2024-422 from ACME - 3 days overdue, CLR-2024-420 - 5 days overdue). Total value at risk: $52K. Average delay impact: +2.5 days to quote submission per overdue clarification, estimated -15% reduction in win probability per week of delay. Historical pattern: ACME Fashion has 3.8 day avg response time (slowest in portfolio). Provide: 1) Quantified business impact of delays (revenue risk, win rate impact, relationship damage), 2) Buyer segmentation by responsiveness with tailored strategies, 3) Escalation protocols for overdue items (when to involve senior stakeholders), 4) Alternative approaches when buyers are unresponsive (proceed with assumptions, request extension), 5) Contractual/SLA considerations for chronic slow responders, 6) Preventive measures to reduce overdue rate, 7) Communication templates for urgent follow-up."
-                  onAskMarbim={onAskMarbim}
-                  size="sm"
-                />
-              </div>
-              <div className="space-y-3">
-                <div className="p-4 rounded-lg bg-[#D0342C]/5 border border-[#D0342C]/20">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-sm text-white">CLR-2024-422 - ACME Fashion</div>
-                    <Badge className="bg-[#D0342C]/10 text-[#D0342C] border-none">3 days overdue</Badge>
-                  </div>
-                  <div className="text-xs text-[#6F83A7] mb-2">Wash test method not specified</div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-[#6F83A7]">RFQ Value at Risk:</span>
-                    <span className="text-xs text-[#D0342C]">$22K</span>
-                  </div>
-                </div>
-                <div className="p-4 rounded-lg bg-[#D0342C]/5 border border-[#D0342C]/20">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-sm text-white">CLR-2024-420 - Uniqlo</div>
-                    <Badge className="bg-[#D0342C]/10 text-[#D0342C] border-none">5 days overdue</Badge>
-                  </div>
-                  <div className="text-xs text-[#6F83A7] mb-2">Size run confirmation needed</div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-[#6F83A7]">RFQ Value at Risk:</span>
-                    <span className="text-xs text-[#D0342C]">$30K</span>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-4 pt-4 border-t border-white/10">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="text-center">
-                    <div className="text-xs text-[#6F83A7] mb-1">Total at Risk</div>
-                    <div className="text-lg text-[#D0342C]">$52K</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-xs text-[#6F83A7] mb-1">Win Rate Impact</div>
-                    <div className="text-lg text-[#EAB308]">-15%</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Auto-Draft Success Analytics */}
-            <div className="p-6 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h4 className="text-white mb-1 flex items-center gap-2">
-                    <Zap className="w-5 h-5 text-[#57ACAF]" />
-                    AI Auto-Draft Performance
-                  </h4>
-                  <p className="text-sm text-[#6F83A7]">Success metrics for AI-generated requests</p>
-                </div>
-                <MarbimAIButton
-                  marbimPrompt="Analyze AI auto-draft clarification performance and effectiveness. Metrics: Total auto-drafted messages: 24 this month, Buyer acceptance rate: 94% (22 accepted, 2 required manual revision), Average buyer response time for AI drafts: 1.1 days vs 1.8 days for manual drafts (39% faster), Tone accuracy: 98% (buyers rated messages as professional and appropriate), Missing field detection accuracy: 96%, Template optimization suggestions: 12 improvements identified. Provide: 1) Detailed performance analysis and ROI of auto-drafting feature, 2) Factors contributing to high acceptance rate (tone, clarity, completeness), 3) Analysis of the 2 rejected drafts and learnings for improvement, 4) Correlation between AI draft quality and faster buyer response, 5) Buyer-specific customization recommendations for further improvement, 6) Template library expansion opportunities, 7) Quality control measures to maintain high standards, 8) Training data optimization based on successful interactions."
-                  onAskMarbim={onAskMarbim}
-                  size="sm"
-                />
-              </div>
-              <div className="space-y-3">
-                <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-sm text-white">Buyer Acceptance Rate</div>
-                    <div className="text-lg text-[#57ACAF]">94%</div>
-                  </div>
-                  <Progress value={94} className="h-2" />
-                </div>
-                <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-sm text-white">Response Time Improvement</div>
-                    <div className="text-lg text-[#57ACAF]">39%</div>
-                  </div>
-                  <Progress value={39} className="h-2" />
-                </div>
-                <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-sm text-white">Tone & Clarity Score</div>
-                    <div className="text-lg text-[#57ACAF]">98%</div>
-                  </div>
-                  <Progress value={98} className="h-2" />
-                </div>
-              </div>
-              <div className="mt-4 pt-4 border-t border-white/10 p-3 rounded-lg bg-[#57ACAF]/5">
-                <div className="text-xs text-[#57ACAF] mb-1">Key Insight</div>
-                <div className="text-sm text-white">AI-drafted messages receive 39% faster responses</div>
-              </div>
-            </div>
-          </div>
-
-          {/* AI Auto-Reminder Feature Card */}
-          <div className="p-6 rounded-xl bg-gradient-to-br from-[#EAB308]/10 to-[#EAB308]/5 border border-[#EAB308]/20">
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-3 flex-1">
-                <div className="w-10 h-10 rounded-lg bg-[#EAB308]/20 flex items-center justify-center flex-shrink-0">
-                  <Bell className="w-5 h-5 text-[#EAB308]" />
-                </div>
-                <div className="flex-1">
-                  <h4 className="text-white mb-2">AI Auto-Reminder System</h4>
-                  <p className="text-sm text-[#6F83A7] mb-3">
-                    MARBIM automatically monitors all pending clarifications and sends polite, contextual reminder emails to buyers based on their response patterns. 
-                    <span className="text-[#57ACAF]"> 87% reminder response rate</span> with an average <span className="text-[#57ACAF]">0.6 day turnaround</span> after reminder sent.
-                  </p>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">Reminders Sent</div>
-                      <div className="text-lg text-white">18/month</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">Response Rate</div>
-                      <div className="text-lg text-[#57ACAF]">87%</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">Avg Turnaround</div>
-                      <div className="text-lg text-[#57ACAF]">0.6d</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <MarbimAIButton
-                marbimPrompt="Analyze AI auto-reminder system effectiveness and optimization opportunities. Metrics: Reminders sent: 18/month (to clarifications pending >2 days), Reminder response rate: 87% (significantly higher than no-reminder baseline of 58%), Average turnaround after reminder: 0.6 days, Buyer-specific reminder timing: H&M (2 days), Zara (2 days), ACME (1.5 days - faster due to slow pattern), Escalation triggers: 2 reminders with no response. Tone customization: Professional for tier-1 buyers, friendly for long-term partners. Provide: 1) Detailed effectiveness analysis of reminder system vs no-reminder baseline, 2) Optimal reminder timing by buyer segment (when to send first reminder, second reminder), 3) Tone and messaging recommendations for different buyer relationships, 4) Escalation strategy when reminders fail (who to involve, when), 5) Buyer feedback on reminder messaging (too aggressive, too passive, just right), 6) Integration with CRM and relationship management, 7) Future enhancements (SMS reminders, multi-channel approach, predictive send timing)."
-                onAskMarbim={onAskMarbim}
-                size="sm"
-              />
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="resolved-clarifications" className="space-y-6">
-          {/* KPI Cards Row */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="p-5 rounded-xl bg-gradient-to-br from-[#57ACAF]/10 to-[#57ACAF]/5 border border-[#57ACAF]/20">
-              <div className="flex items-center gap-3 mb-2">
-                <CheckCircle2 className="w-5 h-5 text-[#57ACAF]" />
-                <div className="text-[#6F83A7] text-sm">Total Resolved</div>
-              </div>
-              <div className="text-3xl text-white mb-1">87</div>
-              <div className="text-xs text-[#6F83A7]">This month</div>
-            </div>
-            <div className="p-5 rounded-xl bg-gradient-to-br from-[#57ACAF]/10 to-[#57ACAF]/5 border border-[#57ACAF]/20">
-              <div className="flex items-center gap-3 mb-2">
-                <Activity className="w-5 h-5 text-[#57ACAF]" />
-                <div className="text-[#6F83A7] text-sm">Resolution Rate</div>
-              </div>
-              <div className="text-3xl text-[#57ACAF] mb-1">92%</div>
-              <div className="text-xs text-[#57ACAF]">+8% improvement</div>
-            </div>
-            <div className="p-5 rounded-xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10">
-              <div className="flex items-center gap-3 mb-2">
-                <Clock className="w-5 h-5 text-white" />
-                <div className="text-[#6F83A7] text-sm">Avg Resolution Time</div>
-              </div>
-              <div className="text-3xl text-white mb-1">1.8d</div>
-              <div className="text-xs text-[#6F83A7]">From send to resolve</div>
-            </div>
-            <div className="p-5 rounded-xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10">
-              <div className="flex items-center gap-3 mb-2">
-                <BookOpen className="w-5 h-5 text-white" />
-                <div className="text-[#6F83A7] text-sm">KB Entries Created</div>
-              </div>
-              <div className="text-3xl text-white mb-1">42</div>
-              <div className="text-xs text-[#6F83A7]">Auto-extracted Q&A</div>
-            </div>
-          </div>
-
-          {/* AI Knowledge Extraction Intelligence */}
-          <div className="p-6 rounded-xl bg-gradient-to-br from-[#57ACAF]/10 to-[#57ACAF]/5 border border-[#57ACAF]/20">
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-3 flex-1">
-                <div className="w-10 h-10 rounded-lg bg-[#57ACAF]/20 flex items-center justify-center flex-shrink-0">
-                  <Sparkles className="w-5 h-5 text-[#57ACAF]" />
-                </div>
-                <div className="flex-1">
-                  <h4 className="text-white mb-2">AI Knowledge Base Extraction</h4>
-                  <p className="text-sm text-[#6F83A7] mb-3">
-                    MARBIM automatically analyzes resolved clarifications and extracts valuable Q&A pairs for knowledge base training. 
-                    <span className="text-[#57ACAF]"> 42 new KB entries</span> created this month with <span className="text-[#57ACAF]">89% reusability score</span>. 
-                    Future automation potential identified for <span className="text-[#57ACAF]">18 recurring question patterns</span>.
-                  </p>
-                  <div className="grid grid-cols-4 gap-3">
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">KB Entries</div>
-                      <div className="text-lg text-[#57ACAF]">42</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">Reusability</div>
-                      <div className="text-lg text-white">89%</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">Recurring Patterns</div>
-                      <div className="text-lg text-[#EAB308]">18</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">Automation Ready</div>
-                      <div className="text-lg text-[#57ACAF]">12</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <MarbimAIButton
-                marbimPrompt="Analyze resolved clarifications for knowledge extraction and automation opportunities. Current state: 87 clarifications resolved this month (92% resolution rate, +8% improvement), average resolution time: 1.8 days, 42 KB entries auto-extracted (89% reusability score), 18 recurring question patterns identified (12 ready for automation). Top recurring clarifications: GSM specifications (14 occurrences), color swatch confirmations (11 occurrences), size run details (9 occurrences), wash test methods (8 occurrences), label placement (6 occurrences). Provide: 1) Detailed analysis of recurring clarification patterns and root causes, 2) Knowledge base optimization recommendations for maximum reusability, 3) Automation strategy for the 12 automation-ready patterns, 4) Buyer education initiatives to prevent recurring clarifications, 5) RFQ template improvements to capture common missing fields upfront, 6) Quality metrics for knowledge extraction accuracy and completeness, 7) Integration opportunities with RFQ parsing and validation systems, 8) ROI analysis of reducing clarification rate through proactive measures."
-                onAskMarbim={onAskMarbim}
-                size="sm"
-              />
-            </div>
-          </div>
-
-          {/* Resolved Clarifications Table */}
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <h3 className="text-white mb-1">Resolved Clarifications</h3>
-                <p className="text-sm text-[#6F83A7]">Successfully resolved clarification requests with response details</p>
-              </div>
-              <MarbimAIButton
-                marbimPrompt="Analyze resolved clarification data for performance insights. Recent resolved items: CLR-2024-418 (Zara, color swatch, 2 days resolution - EXCELLENT), CLR-2024-415 (Nike, stretch percentage, 1 day resolution - EXCELLENT), CLR-2024-412 (Gap, label info, 1.5 days - GOOD), CLR-2024-410 (H&M, fabric GSM, 0.8 days - EXCELLENT). Average resolution time: 1.8 days (improving trend: was 2.4 days 3 months ago, -25% improvement). Top performers: Zara, Nike, H&M. Slow performers: ACME (3.8 days avg), Uniqlo (4.2 days avg). Provide: 1) Resolution time trend analysis and improvement drivers, 2) Buyer segmentation by response speed with relationship insights, 3) Best practices from fast-responding buyers (can we replicate?), 4) Intervention strategies for chronic slow responders, 5) Correlation between resolution speed and RFQ win rates, 6) Process optimization recommendations to maintain improvement trajectory, 7) Buyer satisfaction analysis with clarification handling."
-                onAskMarbim={onAskMarbim}
-                size="sm"
-              />
-            </div>
-            <SmartTable
-              columns={resolvedClarificationsColumns}
-              data={[]}
-              searchPlaceholder="Search resolved clarifications..."
-              onRowClick={handleRowClick}
-            />
-          </div>
-
-          {/* Analytics Grid */}
-          <div className="grid grid-cols-2 gap-6">
-            {/* Resolution Time Trend */}
-            <div className="p-6 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h4 className="text-white mb-1 flex items-center gap-2">
-                    <TrendingDown className="w-5 h-5 text-[#57ACAF]" />
-                    Resolution Time Improvement Trend
-                  </h4>
-                  <p className="text-sm text-[#6F83A7]">6-month performance trajectory</p>
-                </div>
-                <MarbimAIButton
-                  marbimPrompt="Analyze clarification resolution time trends over 6 months. Historical data: April: 2.8 days, May: 2.6 days, June: 2.4 days, July: 2.2 days, August: 2.0 days, September: 1.8 days (current). Overall improvement: 36% reduction in 6 months, monthly improvement rate: ~6% average. Contributing factors: AI auto-drafting (launched June, 39% faster responses), buyer education initiatives (launched July), improved RFQ templates (launched May), dedicated clarification manager (hired August). Provide: 1) Detailed trend analysis and acceleration/deceleration periods, 2) Attribution of improvement to specific initiatives, 3) Comparison to industry benchmarks (if available), 4) Forecast for next 3 months based on current trajectory, 5) Risk factors that could reverse the trend, 6) Recommendations to achieve sub-1.5 day average, 7) Marginal improvement opportunities vs diminishing returns analysis."
-                  onAskMarbim={onAskMarbim}
-                  size="sm"
-                />
-              </div>
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={[
-                  { month: 'Apr', time: 2.8 },
-                  { month: 'May', time: 2.6 },
-                  { month: 'Jun', time: 2.4 },
-                  { month: 'Jul', time: 2.2 },
-                  { month: 'Aug', time: 2.0 },
-                  { month: 'Sep', time: 1.8 },
-                ]}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
-                  <XAxis dataKey="month" stroke="#6F83A7" tick={{ fill: '#6F83A7', fontSize: 12 }} />
-                  <YAxis stroke="#6F83A7" tick={{ fill: '#6F83A7', fontSize: 12 }} domain={[1, 3]} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#0D1117',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: '12px',
-                    }}
-                    formatter={(value: any) => [`${value} days`, 'Avg Resolution Time']}
-                  />
-                  <Line type="monotone" dataKey="time" stroke="#57ACAF" strokeWidth={3} dot={{ fill: '#57ACAF', r: 6 }} />
-                </LineChart>
-              </ResponsiveContainer>
-              <div className="mt-4 p-3 rounded-lg bg-[#57ACAF]/5 border border-[#57ACAF]/20">
-                <div className="text-xs text-[#57ACAF] mb-1">6-Month Improvement</div>
-                <div className="text-sm text-white">36% faster resolution time (2.8d → 1.8d)</div>
-              </div>
-            </div>
-
-            {/* Recurring Clarifications Analysis */}
-            <div className="p-6 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h4 className="text-white mb-1 flex items-center gap-2">
-                    <RefreshCw className="w-5 h-5 text-[#EAB308]" />
-                    Recurring Clarification Patterns
-                  </h4>
-                  <p className="text-sm text-[#6F83A7]">Most common clarification topics</p>
-                </div>
-                <MarbimAIButton
-                  marbimPrompt="Analyze recurring clarification patterns for prevention opportunities. Top recurring topics: GSM specifications (14 occurrences, 16% of total), color swatch confirmations (11 occurrences, 13%), size run details (9 occurrences, 10%), wash test methods (8 occurrences, 9%), label placement (6 occurrences, 7%), packaging requirements (5 occurrences, 6%). Total recurring: 53 out of 87 resolved (61% are recurring patterns - significant opportunity). Cost impact: Each clarification adds avg 1.8 days to quote turnaround, estimated revenue delay: $248K (opportunity cost). Provide: 1) Root cause analysis for each recurring pattern (why buyers keep omitting this info), 2) Buyer segmentation by recurring clarification types (buyer-specific issues vs systemic), 3) RFQ template enhancement recommendations to capture these fields upfront, 4) Buyer education strategy (checklists, training, improved forms), 5) Automation opportunities (pre-fill from past orders, smart defaults), 6) Cost-benefit analysis of prevention initiatives, 7) Success metrics to track reduction in recurrence rate."
-                  onAskMarbim={onAskMarbim}
-                  size="sm"
-                />
-              </div>
-              <div className="space-y-2">
-                {[
-                  { topic: 'GSM Specifications', count: 14, percentage: 16, color: '#57ACAF' },
-                  { topic: 'Color Swatch Confirmations', count: 11, percentage: 13, color: '#EAB308' },
-                  { topic: 'Size Run Details', count: 9, percentage: 10, color: '#6F83A7' },
-                  { topic: 'Wash Test Methods', count: 8, percentage: 9, color: '#57ACAF' },
-                  { topic: 'Label Placement', count: 6, percentage: 7, color: '#EAB308' },
-                ].map((item, index) => (
-                  <div key={index} className="p-3 rounded-lg bg-white/5 border border-white/10">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-sm text-white">{item.topic}</div>
-                      <div className="text-xs text-[#6F83A7]">{item.count} times</div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Progress value={item.percentage * 6} className="h-2 flex-1" />
-                      <div className="text-xs" style={{ color: item.color }}>{item.percentage}%</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 pt-4 border-t border-white/10">
-                <div className="text-center">
-                  <div className="text-xs text-[#6F83A7] mb-1">Prevention Opportunity</div>
-                  <div className="text-lg text-[#EAB308]">61% are recurring patterns</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Buyer Performance Comparison */}
-          <div className="p-6 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h4 className="text-white mb-1 flex items-center gap-2">
-                  <Users className="w-5 h-5 text-[#57ACAF]" />
-                  Buyer Response Performance Ranking
-                </h4>
-                <p className="text-sm text-[#6F83A7]">Comparative analysis of buyer responsiveness</p>
-              </div>
-              <MarbimAIButton
-                marbimPrompt="Analyze buyer-specific clarification response performance for relationship insights. Buyer ranking by avg response time: 1) Zara: 0.8 days (EXCELLENT, 92% on-time, strong partnership), 2) H&M: 1.1 days (EXCELLENT, 88% on-time, tier-1 buyer), 3) Gap: 1.4 days (GOOD, 82% on-time, growing account), 4) Nike: 1.5 days (GOOD, 78% on-time, strategic buyer), 5) Uniqlo: 2.8 days (POOR, 45% on-time, needs improvement), 6) ACME Fashion: 3.8 days (VERY POOR, 32% on-time, at-risk relationship). Total buyers: 18, average response: 1.8 days. Correlation analysis: Fast responders = 78% avg win rate, Slow responders = 52% avg win rate (-26 points). Provide: 1) Deep-dive into top performers (what makes them responsive? relationship factors?), 2) Intervention strategy for underperformers (communication, escalation, account management), 3) Relationship health assessment based on responsiveness, 4) Optimal engagement strategy per buyer segment, 5) When to escalate slow-responding buyers to senior stakeholders, 6) Impact of responsiveness on overall business value and strategic importance, 7) Buyer education and feedback collection to improve response rates."
-                onAskMarbim={onAskMarbim}
-                size="sm"
-              />
-            </div>
-            <div className="space-y-3">
-              {[
-                { rank: 1, buyer: 'Zara', time: '0.8d', performance: 'Excellent', color: '#57ACAF', onTime: '92%' },
-                { rank: 2, buyer: 'H&M', time: '1.1d', performance: 'Excellent', color: '#57ACAF', onTime: '88%' },
-                { rank: 3, buyer: 'Gap', time: '1.4d', performance: 'Good', color: '#6F83A7', onTime: '82%' },
-                { rank: 4, buyer: 'Nike', time: '1.5d', performance: 'Good', color: '#6F83A7', onTime: '78%' },
-                { rank: 5, buyer: 'Uniqlo', time: '2.8d', performance: 'Poor', color: '#EAB308', onTime: '45%' },
-                { rank: 6, buyer: 'ACME Fashion', time: '3.8d', performance: 'Very Poor', color: '#D0342C', onTime: '32%' },
-              ].map((item) => (
-                <div key={item.rank} className="flex items-center justify-between p-4 rounded-lg bg-white/5 border border-white/10">
-                  <div className="flex items-center gap-4">
-                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm text-white">
-                      #{item.rank}
-                    </div>
-                    <div>
-                      <div className="text-white mb-1">{item.buyer}</div>
-                      <div className="text-xs text-[#6F83A7]">On-time: {item.onTime}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <Badge className="border-none" style={{ backgroundColor: `${item.color}20`, color: item.color }}>
-                      {item.performance}
-                    </Badge>
-                    <div className="text-white w-16 text-right">{item.time}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="buyer-response-logs" className="space-y-6">
-          {/* KPI Cards Row */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="p-5 rounded-xl bg-gradient-to-br from-[#57ACAF]/10 to-[#57ACAF]/5 border border-[#57ACAF]/20">
-              <div className="flex items-center gap-3 mb-2">
-                <MessageSquare className="w-5 h-5 text-[#57ACAF]" />
-                <div className="text-[#6F83A7] text-sm">Total Responses</div>
-              </div>
-              <div className="text-3xl text-white mb-1">87</div>
-              <div className="text-xs text-[#6F83A7]">This month</div>
-            </div>
-            <div className="p-5 rounded-xl bg-gradient-to-br from-[#57ACAF]/10 to-[#57ACAF]/5 border border-[#57ACAF]/20">
-              <div className="flex items-center gap-3 mb-2">
-                <ThumbsUp className="w-5 h-5 text-[#57ACAF]" />
-                <div className="text-[#6F83A7] text-sm">Positive Sentiment</div>
-              </div>
-              <div className="text-3xl text-[#57ACAF] mb-1">62%</div>
-              <div className="text-xs text-[#57ACAF]">54 responses</div>
-            </div>
-            <div className="p-5 rounded-xl bg-gradient-to-br from-[#6F83A7]/10 to-[#6F83A7]/5 border border-[#6F83A7]/20">
-              <div className="flex items-center gap-3 mb-2">
-                <Minus className="w-5 h-5 text-[#6F83A7]" />
-                <div className="text-[#6F83A7] text-sm">Neutral Sentiment</div>
-              </div>
-              <div className="text-3xl text-white mb-1">28%</div>
-              <div className="text-xs text-[#6F83A7]">24 responses</div>
-            </div>
-            <div className="p-5 rounded-xl bg-gradient-to-br from-[#EAB308]/10 to-[#EAB308]/5 border border-[#EAB308]/20">
-              <div className="flex items-center gap-3 mb-2">
-                <ThumbsDown className="w-5 h-5 text-[#EAB308]" />
-                <div className="text-[#6F83A7] text-sm">Negative Sentiment</div>
-              </div>
-              <div className="text-3xl text-[#EAB308] mb-1">10%</div>
-              <div className="text-xs text-[#6F83A7]">9 responses</div>
-            </div>
-          </div>
-
-          {/* AI Sentiment Analysis Intelligence */}
-          <div className="p-6 rounded-xl bg-gradient-to-br from-[#57ACAF]/10 to-[#57ACAF]/5 border border-[#57ACAF]/20">
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-3 flex-1">
-                <div className="w-10 h-10 rounded-lg bg-[#57ACAF]/20 flex items-center justify-center flex-shrink-0">
-                  <Sparkles className="w-5 h-5 text-[#57ACAF]" />
-                </div>
-                <div className="flex-1">
-                  <h4 className="text-white mb-2">AI Sentiment Analysis & Relationship Intelligence</h4>
-                  <p className="text-sm text-[#6F83A7] mb-3">
-                    MARBIM automatically analyzes every buyer response for sentiment, tone, urgency, and relationship health indicators. 
-                    <span className="text-[#57ACAF]"> 62% positive sentiment</span> (up from 58% last month), 
-                    <span className="text-[#EAB308]"> 10% negative sentiment</span> flagged for relationship intervention. 
-                    Sentiment analysis accuracy: <span className="text-[#57ACAF]">96% validated</span> against manual review.
-                  </p>
-                  <div className="grid grid-cols-4 gap-3">
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">Analysis Accuracy</div>
-                      <div className="text-lg text-[#57ACAF]">96%</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">Positive Trend</div>
-                      <div className="text-lg text-[#57ACAF]">+4%</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">At-Risk Buyers</div>
-                      <div className="text-lg text-[#EAB308]">3</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">Escalations</div>
-                      <div className="text-lg text-white">2</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <MarbimAIButton
-                marbimPrompt="Analyze buyer response sentiment patterns for relationship management insights. Sentiment distribution: 62% positive (54 responses - cooperative, prompt, appreciative tone), 28% neutral (24 responses - factual, brief, business-like), 10% negative (9 responses - frustrated, delayed, complaints). Trend: Positive sentiment increased from 58% to 62% (+4 points) due to faster response times and improved clarification quality. Negative sentiment buyers: ACME Fashion (3 negative responses - delivery delays), Uniqlo (2 negative - slow internal approvals), NewBrand Co (4 negative - pricing concerns). Accuracy: 96% validated against manual review. Provide: 1) Deep sentiment analysis with relationship health implications, 2) At-risk buyer identification and intervention strategies, 3) Correlation between sentiment and business outcomes (win rates, order values, renewals), 4) Best practices from positive sentiment interactions, 5) Root cause analysis of negative sentiment (systemic issues vs isolated incidents), 6) Escalation protocol for sustained negative sentiment, 7) Proactive relationship management recommendations, 8) Communication optimization to improve sentiment scores."
-                onAskMarbim={onAskMarbim}
-                size="sm"
-              />
-            </div>
-          </div>
-
-          {/* Recent Buyer Response Logs */}
-          <div className="space-y-4">
-            <div className="flex items-start justify-between mb-2">
-              <div className="flex-1">
-                <h3 className="text-white mb-1">Recent Buyer Responses</h3>
-                <p className="text-sm text-[#6F83A7]">Latest clarification responses with AI sentiment analysis</p>
-              </div>
-              <MarbimAIButton
-                marbimPrompt="Analyze recent buyer response logs for actionable insights. Recent responses: 1) H&M (2024-10-26): 'GSM should be 180, test method ISO 105-C06' - Neutral sentiment, clear technical response, 2) Zara (2024-10-25): 'Color swatch confirmed, proceed with costing' - Positive sentiment, cooperative tone, 3) ACME (2024-10-24): 'Delayed response, will get back by EOD' - Negative sentiment, delay indication, 4) Gap (2024-10-23): 'Size run approved, please send quote ASAP' - Positive sentiment, urgency indicator, 5) Nike (2024-10-22): 'Need more time to review with design team' - Neutral sentiment, timeline extension. Provide: 1) Response-by-response analysis with context and implications, 2) Buyer engagement level assessment (proactive vs reactive, detailed vs brief), 3) Urgency and priority indicators in buyer language, 4) Relationship quality signals in tone and messaging, 5) Follow-up action recommendations per response, 6) Pattern recognition across multiple responses from same buyer, 7) Best response time and format based on buyer communication style."
-                onAskMarbim={onAskMarbim}
-                size="sm"
-              />
-            </div>
-            {[
-              { 
-                buyer: 'H&M', 
-                date: '2024-10-26', 
-                time: '10:32 AM',
-                clarificationId: 'CLR-2024-421',
-                rfqId: 'RFQ-2024-1847',
-                response: 'GSM should be 180, test method ISO 105-C06. Please proceed with costing based on these specifications.',
-                sentiment: 'Neutral',
-                urgency: 'Normal',
-                responseTime: '0.9 days',
-                icon: Minus
-              },
-              { 
-                buyer: 'Zara', 
-                date: '2024-10-25', 
-                time: '2:15 PM',
-                clarificationId: 'CLR-2024-418',
-                rfqId: 'RFQ-2024-1848',
-                response: 'Color swatch confirmed and approved. Looking forward to receiving your competitive quote. Please proceed with costing.',
-                sentiment: 'Positive',
-                urgency: 'High',
-                responseTime: '0.6 days',
-                icon: ThumbsUp
-              },
-              { 
-                buyer: 'ACME Fashion', 
-                date: '2024-10-24', 
-                time: '4:48 PM',
-                clarificationId: 'CLR-2024-422',
-                rfqId: 'RFQ-2024-1851',
-                response: 'Delayed response due to internal review process. Will get back to you by end of day with wash test specifications.',
-                sentiment: 'Negative',
-                urgency: 'Low',
-                responseTime: '3.2 days',
-                icon: ThumbsDown
-              },
-              { 
-                buyer: 'Gap', 
-                date: '2024-10-23', 
-                time: '11:20 AM',
-                clarificationId: 'CLR-2024-419',
-                rfqId: 'RFQ-2024-1845',
-                response: 'Size run approved as per your clarification. Please send quote ASAP - we have tight deadline for this season.',
-                sentiment: 'Positive',
-                urgency: 'High',
-                responseTime: '1.2 days',
-                icon: ThumbsUp
-              },
-              { 
-                buyer: 'Nike', 
-                date: '2024-10-22', 
-                time: '9:05 AM',
-                clarificationId: 'CLR-2024-415',
-                rfqId: 'RFQ-2024-1850',
-                response: 'Stretch percentage confirmed at 15-20%. Need more time to review technical specs with design team before final approval.',
-                sentiment: 'Neutral',
-                urgency: 'Normal',
-                responseTime: '1.4 days',
-                icon: Minus
-              },
-            ].map((log, index) => {
-              const SentimentIcon = log.icon;
-              return (
-                <div key={index} className="p-5 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-sm text-white">
-                        {log.buyer.charAt(0)}
-                      </div>
-                      <div>
-                        <div className="text-white mb-1">{log.buyer}</div>
-                        <div className="flex items-center gap-2 text-xs text-[#6F83A7]">
-                          <span>{log.clarificationId}</span>
-                          <span>•</span>
-                          <span>{log.rfqId}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex flex-col items-end">
-                        <Badge className={
-                          log.sentiment === 'Positive' ? 'bg-[#57ACAF]/10 text-[#57ACAF] border border-[#57ACAF]/20' :
-                          log.sentiment === 'Neutral' ? 'bg-[#6F83A7]/10 text-[#6F83A7] border border-[#6F83A7]/20' :
-                          'bg-[#EAB308]/10 text-[#EAB308] border border-[#EAB308]/20'
-                        }>
-                          <SentimentIcon className="w-3 h-3 mr-1" />
-                          {log.sentiment}
-                        </Badge>
-                        {log.urgency === 'High' && (
-                          <Badge className="bg-[#D0342C]/10 text-[#D0342C] border border-[#D0342C]/20 mt-1">
-                            High Urgency
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs text-[#6F83A7]">{log.date}</div>
-                        <div className="text-xs text-[#6F83A7]">{log.time}</div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="p-4 rounded-lg bg-white/5 border border-white/10 mb-3">
-                    <p className="text-sm text-white italic leading-relaxed">"{log.response}"</p>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4 text-xs">
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-[#6F83A7]" />
-                        <span className="text-[#6F83A7]">Response time:</span>
-                        <span className={log.responseTime.startsWith('0') || log.responseTime.startsWith('1.') ? 'text-[#57ACAF]' : 'text-[#EAB308]'}>
-                          {log.responseTime}
-                        </span>
-                      </div>
-                    </div>
-                    <MarbimAIButton
-                      marbimPrompt={`Analyze this specific buyer response for detailed insights. Buyer: ${log.buyer}, Clarification: ${log.clarificationId}, RFQ: ${log.rfqId}, Response: "${log.response}", Sentiment: ${log.sentiment}, Urgency: ${log.urgency}, Response time: ${log.responseTime}. Historical context: ${log.buyer} has ${log.buyer === 'ACME Fashion' ? '3.8 day avg response time (slowest)' : log.buyer === 'Zara' ? '0.8 day avg response time (fastest)' : '1.2 day avg response time'}. Provide: 1) Detailed response analysis (completeness, clarity, cooperative tone), 2) Sentiment driver analysis (what language/phrases indicate ${log.sentiment} sentiment), 3) ${log.urgency === 'High' ? 'Urgency flag justification and recommended expedited actions' : 'Normal urgency - standard follow-up protocol'}, 4) Next action recommendations (immediate quote preparation, additional clarifications, follow-up timing), 5) Relationship quality assessment based on this response, 6) Buyer communication preference insights (detailed vs brief, formal vs casual), 7) Impact on RFQ timeline and win probability.`}
-                      onAskMarbim={onAskMarbim}
-                      size="sm"
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Sentiment Analytics Grid */}
-          <div className="grid grid-cols-2 gap-6">
-            {/* Sentiment Distribution Chart */}
-            <div className="p-6 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h4 className="text-white mb-1 flex items-center gap-2">
-                    <BarChart3 className="w-5 h-5 text-[#57ACAF]" />
-                    Sentiment Distribution Trend
-                  </h4>
-                  <p className="text-sm text-[#6F83A7]">Monthly sentiment evolution</p>
-                </div>
-                <MarbimAIButton
-                  marbimPrompt="Analyze sentiment distribution trends over the last 6 months. Historical data: April - Positive: 54%, Neutral: 32%, Negative: 14%, May - Positive: 56%, Neutral: 30%, Negative: 14%, June - Positive: 58%, Neutral: 29%, Negative: 13%, July - Positive: 59%, Neutral: 29%, Negative: 12%, August - Positive: 61%, Neutral: 28%, Negative: 11%, September - Positive: 62%, Neutral: 28%, Negative: 10% (current). Overall trend: Positive sentiment increasing (+8 points over 6 months), negative sentiment decreasing (-4 points). Contributing factors: Faster response times, improved clarification quality, AI auto-drafting, buyer relationship initiatives. Provide: 1) Trend analysis and acceleration/deceleration periods, 2) Attribution of sentiment improvement to specific initiatives, 3) Buyer-specific sentiment trends (which buyers improving/declining), 4) Correlation with business outcomes (sentiment vs win rates, order values), 5) Forecast for next 3 months, 6) Risk factors that could reverse positive trend, 7) Strategies to reach 70%+ positive sentiment target."
-                  onAskMarbim={onAskMarbim}
-                  size="sm"
-                />
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <ThumbsUp className="w-4 h-4 text-[#57ACAF]" />
-                      <span className="text-sm text-white">Positive</span>
-                    </div>
-                    <span className="text-sm text-[#57ACAF]">62%</span>
-                  </div>
-                  <Progress value={62} className="h-3" />
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <Minus className="w-4 h-4 text-[#6F83A7]" />
-                      <span className="text-sm text-white">Neutral</span>
-                    </div>
-                    <span className="text-sm text-white">28%</span>
-                  </div>
-                  <Progress value={28} className="h-3" />
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <ThumbsDown className="w-4 h-4 text-[#EAB308]" />
-                      <span className="text-sm text-white">Negative</span>
-                    </div>
-                    <span className="text-sm text-[#EAB308]">10%</span>
-                  </div>
-                  <Progress value={10} className="h-3" />
-                </div>
-              </div>
-              <div className="mt-4 pt-4 border-t border-white/10 p-3 rounded-lg bg-[#57ACAF]/5">
-                <div className="text-xs text-[#57ACAF] mb-1">6-Month Improvement</div>
-                <div className="text-sm text-white">+8% increase in positive sentiment</div>
-              </div>
-            </div>
-
-            {/* Negative Sentiment Analysis */}
-            <div className="p-6 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h4 className="text-white mb-1 flex items-center gap-2">
-                    <AlertTriangle className="w-5 h-5 text-[#EAB308]" />
-                    Negative Sentiment Root Causes
-                  </h4>
-                  <p className="text-sm text-[#6F83A7]">Analysis of relationship concerns</p>
-                </div>
-                <MarbimAIButton
-                  marbimPrompt="Analyze negative sentiment responses for root cause identification and mitigation. Negative sentiment breakdown (9 responses, 10% of total): 1) Delivery delays (4 responses, 44% of negative) - ACME Fashion, NewBrand Co complaints about late sample shipments, 2) Internal approval delays (2 responses, 22%) - Uniqlo citing slow internal processes, 3) Pricing concerns (2 responses, 22%) - NewBrand Co price sensitivity, 4) Communication gaps (1 response, 11%) - missed follow-up. Impact: Buyers with sustained negative sentiment have 35% lower win rates. At-risk buyers: ACME Fashion (3 negative in last 3 months), NewBrand Co (4 negative). Provide: 1) Deep root cause analysis for each negative sentiment category, 2) Buyer-specific intervention strategies for at-risk relationships, 3) Process improvements to address systemic issues (delivery, approvals, pricing), 4) Escalation protocol for sustained negative sentiment buyers, 5) Relationship recovery tactics and success metrics, 6) Preventive measures to reduce negative sentiment occurrence, 7) Training needs for customer-facing teams, 8) When to consider de-prioritizing chronically difficult buyers."
-                  onAskMarbim={onAskMarbim}
-                  size="sm"
-                />
-              </div>
-              <div className="space-y-3">
-                {[
-                  { cause: 'Delivery Delays', count: 4, percentage: 44, color: '#D0342C' },
-                  { cause: 'Internal Approval Issues', count: 2, percentage: 22, color: '#EAB308' },
-                  { cause: 'Pricing Concerns', count: 2, percentage: 22, color: '#EAB308' },
-                  { cause: 'Communication Gaps', count: 1, percentage: 11, color: '#6F83A7' },
-                ].map((item, index) => (
-                  <div key={index} className="p-3 rounded-lg bg-white/5 border border-white/10">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-sm text-white">{item.cause}</div>
-                      <div className="text-xs text-[#6F83A7]">{item.count} responses</div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Progress value={item.percentage * 2} className="h-2 flex-1" />
-                      <div className="text-xs" style={{ color: item.color }}>{item.percentage}%</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 pt-4 border-t border-white/10">
-                <div className="text-center">
-                  <div className="text-xs text-[#6F83A7] mb-1">At-Risk Buyers</div>
-                  <div className="text-lg text-[#D0342C]">3 require intervention</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="ai-insights" className="space-y-6">
-          <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-12 text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#EAB308]/10">
-              <Sparkles className="h-6 w-6 text-[#EAB308]" />
-            </div>
-            <h3 className="text-white text-lg font-medium">AI insights appear here as you work</h3>
-            <p className="mt-2 mx-auto max-w-md text-sm text-[#6F83A7]">
-              As RFQs, quotes and clarifications flow through the platform, MARBIM analyzes them and
-              surfaces trends, bottlenecks and recommendations here. Ask MARBIM anytime for an on-demand read.
+    return (
+      <>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-white mb-1">Clarification Tracker</h2>
+            <p className="text-sm text-[#6F83A7]">
+              Missing specs on a buyer RFQ? Track the questions and answers here before costing.
             </p>
           </div>
-        </TabsContent>
-      </Tabs>
-    </>
-  );
+          <Button
+            className="bg-[#EAB308] hover:bg-[#EAB308]/90 text-black"
+            onClick={() => setNewClarOpen(true)}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            New clarification
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="p-5 rounded-xl bg-white/5 border border-white/10">
+            <div className="flex items-center gap-2 mb-2">
+              <HelpCircle className="w-4 h-4 text-[#EAB308]" />
+              <span className="text-xs text-[#6F83A7]">Open</span>
+            </div>
+            <div className="text-2xl text-white">{openClar.length}</div>
+          </div>
+          <div className="p-5 rounded-xl bg-white/5 border border-white/10">
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle2 className="w-4 h-4 text-[#57ACAF]" />
+              <span className="text-xs text-[#6F83A7]">Answered</span>
+            </div>
+            <div className="text-2xl text-white">{answeredClar.length}</div>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-white mb-3">Open</h3>
+            {clarLoading ? (
+              <p className="text-sm text-[#6F83A7]">Loading…</p>
+            ) : openClar.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-center text-sm text-[#6F83A7]">
+                No open clarifications. Raise one when a buyer RFQ is missing specs you need to cost it.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {openClar.map((c) => (
+                  <ClarCard key={c.id} c={c} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {answeredClar.length > 0 && (
+            <div>
+              <h3 className="text-white mb-3">Resolved</h3>
+              <div className="space-y-3">
+                {answeredClar.map((c) => (
+                  <ClarCard key={c.id} c={c} />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* New clarification dialog */}
+        <Dialog open={newClarOpen} onOpenChange={setNewClarOpen}>
+          <DialogContent className="sm:max-w-md bg-[#0F1420] border-white/10 text-white">
+            <DialogHeader>
+              <DialogTitle>New clarification</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <span className="text-sm text-white/90">RFQ</span>
+                <Select value={newClarRfqId} onValueChange={setNewClarRfqId}>
+                  <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                    <SelectValue placeholder="Select an RFQ" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {liveRfqs.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>
+                        {r.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <span className="text-sm text-white/90">Question</span>
+                <Textarea
+                  value={newClarQuestion}
+                  onChange={(e) => setNewClarQuestion(e.target.value)}
+                  placeholder="e.g. Please confirm GSM and the exact size run (S–XXL?)."
+                  className="min-h-[90px] bg-white/5 border-white/10 text-white placeholder:text-[#6F83A7]"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                onClick={submitClarification}
+                disabled={!newClarRfqId || !newClarQuestion.trim()}
+                className="w-full bg-[#EAB308] hover:bg-[#EAB308]/90 text-black"
+              >
+                Raise clarification
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Answer dialog */}
+        <Dialog open={!!answerClarId} onOpenChange={(o) => !o && setAnswerClarId(null)}>
+          <DialogContent className="sm:max-w-md bg-[#0F1420] border-white/10 text-white">
+            <DialogHeader>
+              <DialogTitle>Answer clarification</DialogTitle>
+            </DialogHeader>
+            <Textarea
+              value={answerText}
+              onChange={(e) => setAnswerText(e.target.value)}
+              placeholder="Buyer's answer / resolution…"
+              className="min-h-[90px] bg-white/5 border-white/10 text-white placeholder:text-[#6F83A7]"
+            />
+            <DialogFooter>
+              <Button
+                onClick={submitAnswer}
+                className="w-full bg-[#57ACAF] hover:bg-[#57ACAF]/90 text-white"
+              >
+                Mark answered
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  };
 
   const renderContent = () => {
     switch (currentView) {
