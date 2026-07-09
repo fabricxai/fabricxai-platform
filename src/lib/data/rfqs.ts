@@ -24,6 +24,34 @@ export interface Rfq {
   buyer?: { company_name: string } | null;
 }
 
+export interface QuoteWithRfq extends Quote {
+  is_demo: boolean;
+  rfq?: { title: string; buyer?: { company_name: string } | null } | null;
+}
+
+/** Live list of the company's quotes with their RFQ + buyer (RLS-scoped). */
+export function useQuotes() {
+  const [data, setData] = useState<QuoteWithRfq[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    const supabase = createClient();
+    setLoading(true);
+    const { data: rows } = await supabase
+      .from('quotes')
+      .select('*, rfq:rfqs(title, buyer:buyers(company_name))')
+      .order('created_at', { ascending: false });
+    setData((rows as unknown as QuoteWithRfq[]) ?? []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  return { data, loading, refresh };
+}
+
 /** Delete all demo-flagged rows for the company (RLS-scoped). */
 export async function clearDemoData() {
   const supabase = createClient();

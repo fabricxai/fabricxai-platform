@@ -12,7 +12,7 @@ import { QuoteScenarioDetailDrawer } from '../QuoteScenarioDetailDrawer';
 import { UploadRFQDrawer } from '../UploadRFQDrawer';
 import { CreateScenarioDrawer } from '../CreateScenarioDrawer';
 import { useDatabase, MODULE_NAMES, canPerformAction } from '../../utils/supabase';
-import { useRfqs, clearDemoData, type Rfq } from '@/lib/data/rfqs';
+import { useRfqs, useQuotes, clearDemoData, type Rfq, type QuoteWithRfq } from '@/lib/data/rfqs';
 import { useRouter } from 'next/navigation';
 import { 
   FileText, TrendingUp, AlertTriangle, CheckCircle2, Eye, Edit, Search,
@@ -362,6 +362,7 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
   const db = useDatabase();
   // Live RFQs from Supabase (RLS-scoped to the company). Replaces localStorage seed.
   const { data: liveRfqs, loading: rfqsLoading, refresh: refreshRfqs } = useRfqs();
+  const { data: quotes, loading: quotesLoading } = useQuotes();
   const router = useRouter();
   
   // UI State
@@ -2173,911 +2174,104 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
     </>
   );
 
-  const renderQuotationBuilder = () => (
-    <>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-white mb-1">Quotation Builder</h2>
-          <p className="text-sm text-[#6F83A7]">Build, simulate, and approve multiple quote scenarios</p>
-        </div>
-        <div className="flex gap-3">
-          <Button variant="outline" className="border-white/10">
-            <Filter className="w-4 h-4 mr-2" />
-            Filter
-          </Button>
-          <Button 
-            className="bg-[#EAB308] hover:bg-[#EAB308]/90 text-black"
-            onClick={() => setCreateScenarioDrawerOpen(true)}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            New Scenario
-          </Button>
-        </div>
-      </div>
+  const renderQuotationBuilder = () => {
+    const money = (n: number) =>
+      `$${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const statusColor: Record<string, string> = {
+      Draft: 'bg-[#6F83A7]/15 text-[#6F83A7]',
+      Sent: 'bg-[#EAB308]/15 text-[#EAB308]',
+      Accepted: 'bg-[#57ACAF]/15 text-[#57ACAF]',
+      Rejected: 'bg-[#D0342C]/15 text-[#D0342C]',
+    };
+    const rows = quotes.map((q: QuoteWithRfq) => {
+      const total =
+        Number(q.material_cost) + Number(q.labor_cost) + Number(q.overhead_cost) + Number(q.freight_cost);
+      return {
+        id: q.id,
+        rfq: q.rfq?.title ?? '—',
+        buyer: q.rfq?.buyer?.company_name ?? '—',
+        totalCost: money(total),
+        margin: `${Number(q.margin_pct)}%`,
+        fob: `${q.currency} ${Number(q.fob_price).toFixed(2)}`,
+        leadTime: q.lead_time_days ? `${q.lead_time_days}d` : '—',
+        status: q.status.charAt(0).toUpperCase() + q.status.slice(1),
+      };
+    });
+    const draftCount = quotes.filter((q) => q.status === 'draft').length;
+    const sentCount = quotes.filter((q) => q.status === 'sent').length;
+    const acceptedCount = quotes.filter((q) => q.status === 'accepted').length;
+    const avgMargin = quotes.length
+      ? Math.round(quotes.reduce((s, q) => s + Number(q.margin_pct), 0) / quotes.length)
+      : null;
 
-      <Tabs defaultValue="scenario-builder" className="space-y-6">
-        {/* Tab Navigation */}
-        <div className="relative bg-gradient-to-r from-white/5 via-white/10 to-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-1.5 mb-6 shadow-lg shadow-black/20">
-          <TabsList className="w-full grid grid-cols-4 bg-transparent gap-1.5 p-0 h-auto">
-            <TabsTrigger 
-              value="scenario-builder" 
-              className="relative flex items-center justify-center gap-2.5 py-3.5 px-4 bg-white/5 hover:bg-white/10 data-[state=active]:bg-gradient-to-br data-[state=active]:from-[#EAB308] data-[state=active]:to-[#EAB308]/80 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-[#EAB308]/30 text-[#6F83A7] data-[state=active]:font-medium rounded-xl transition-all duration-300 group"
-            >
-              <Layers className="w-4 h-4 group-data-[state=active]:scale-110 transition-transform" />
-              <span className="text-xs">Scenario Builder</span>
-            </TabsTrigger>
-            <TabsTrigger 
-              value="approval-workflow" 
-              className="relative flex items-center justify-center gap-2.5 py-3.5 px-4 bg-white/5 hover:bg-white/10 data-[state=active]:bg-gradient-to-br data-[state=active]:from-[#EAB308] data-[state=active]:to-[#EAB308]/80 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-[#EAB308]/30 text-[#6F83A7] data-[state=active]:font-medium rounded-xl transition-all duration-300 group"
-            >
-              <CheckSquare className="w-4 h-4 group-data-[state=active]:scale-110 transition-transform" />
-              <span className="text-xs">Approval Workflow</span>
-            </TabsTrigger>
-            <TabsTrigger 
-              value="comparative-analytics" 
-              className="relative flex items-center justify-center gap-2.5 py-3.5 px-4 bg-white/5 hover:bg-white/10 data-[state=active]:bg-gradient-to-br data-[state=active]:from-[#EAB308] data-[state=active]:to-[#EAB308]/80 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-[#EAB308]/30 text-[#6F83A7] data-[state=active]:font-medium rounded-xl transition-all duration-300 group"
-            >
-              <BarChart3 className="w-4 h-4 group-data-[state=active]:scale-110 transition-transform" />
-              <span className="text-xs">Comparative Analytics</span>
-            </TabsTrigger>
-            <TabsTrigger 
-              value="ai-insights" 
-              className="relative flex items-center justify-center gap-2.5 py-3.5 px-4 bg-white/5 hover:bg-white/10 data-[state=active]:bg-gradient-to-br data-[state=active]:from-[#EAB308] data-[state=active]:to-[#EAB308]/80 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-[#EAB308]/30 text-[#6F83A7] data-[state=active]:font-medium rounded-xl transition-all duration-300 group"
-            >
-              <Sparkles className="w-4 h-4 group-data-[state=active]:scale-110 transition-transform" />
-              <span className="text-xs">AI Insights</span>
-            </TabsTrigger>
-          </TabsList>
-        </div>
+    const cols: Column[] = [
+      { key: 'rfq', label: 'RFQ', sortable: true },
+      { key: 'buyer', label: 'Buyer', sortable: true },
+      { key: 'totalCost', label: 'Total Cost' },
+      { key: 'margin', label: 'Margin' },
+      { key: 'fob', label: 'FOB Price', render: (v: string) => <span className="font-medium text-[#57ACAF]">{v}</span> },
+      { key: 'leadTime', label: 'Lead Time' },
+      { key: 'status', label: 'Status', render: (v: string) => <Badge className={statusColor[v] || statusColor.Draft}>{v}</Badge> },
+    ];
 
-        <TabsContent value="scenario-builder" className="space-y-6">
-          {/* KPI Overview Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="p-5 rounded-xl bg-gradient-to-br from-[#57ACAF]/10 to-[#57ACAF]/5 border border-[#57ACAF]/20">
-              <div className="flex items-center gap-3 mb-2">
-                <Layers className="w-5 h-5 text-[#57ACAF]" />
-                <div className="text-[#6F83A7] text-sm">Total Scenarios</div>
-              </div>
-              <div className="text-3xl text-white mb-1">3</div>
-              <div className="text-xs text-[#6F83A7]">Active scenarios</div>
-            </div>
-            <div className="p-5 rounded-xl bg-gradient-to-br from-[#EAB308]/10 to-[#EAB308]/5 border border-[#EAB308]/20">
-              <div className="flex items-center gap-3 mb-2">
-                <Target className="w-5 h-5 text-[#EAB308]" />
-                <div className="text-[#6F83A7] text-sm">Recommended</div>
-              </div>
-              <div className="text-3xl text-[#EAB308] mb-1">Scenario B</div>
-              <div className="text-xs text-[#6F83A7]">12% margin, 72% win prob</div>
-            </div>
-            <div className="p-5 rounded-xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10">
-              <div className="flex items-center gap-3 mb-2">
-                <DollarSign className="w-5 h-5 text-white" />
-                <div className="text-[#6F83A7] text-sm">FOB Range</div>
-              </div>
-              <div className="text-3xl text-white mb-1">$5.50-6.25</div>
-              <div className="text-xs text-[#6F83A7]">Price spread</div>
-            </div>
-            <div className="p-5 rounded-xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10">
-              <div className="flex items-center gap-3 mb-2">
-                <TrendingUp className="w-5 h-5 text-white" />
-                <div className="text-[#6F83A7] text-sm">Avg Win Rate</div>
-              </div>
-              <div className="text-3xl text-white mb-1">65%</div>
-              <div className="text-xs text-[#57ACAF]">Across all scenarios</div>
-            </div>
-          </div>
+    const kpis = [
+      { label: 'Total Quotes', value: String(quotes.length), icon: FileText, color: '#57ACAF' },
+      { label: 'Drafts', value: String(draftCount), icon: Layers, color: '#6F83A7' },
+      { label: 'Sent', value: String(sentCount), icon: Send, color: '#EAB308' },
+      { label: 'Avg Margin', value: avgMargin === null ? '—' : `${avgMargin}%`, icon: TrendingUp, color: '#57ACAF' },
+    ];
 
-          {/* Main Scenarios Table */}
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <h3 className="text-white mb-1">Quote Scenarios</h3>
-                <p className="text-sm text-[#6F83A7]">Build and compare multiple pricing and margin scenarios</p>
-              </div>
-              <MarbimAIButton
-                marbimPrompt="Analyze all quotation scenarios for optimization opportunities. Current scenarios: A-Premium (18% margin, $6.25 FOB, 45d lead time, Organic Cotton, 58% win prob), B-Competitive (12% margin, $5.85 FOB, 35d lead time, Standard Cotton, 72% win prob - RECOMMENDED), C-Budget (8% margin, $5.50 FOB, 50d lead time, Blended Cotton, 65% win prob). Provide: 1) Deep analysis of margin vs win probability trade-offs across scenarios, 2) Optimal pricing strategy based on buyer's historical acceptance patterns, 3) Fabric choice impact on buyer perception and sustainability goals, 4) Lead time competitiveness and production capacity alignment, 5) Risk assessment for each scenario (margin risk, production risk, competitive risk), 6) Scenario refinement suggestions to maximize expected value, 7) Alternative scenarios worth exploring, 8) Decision framework for scenario selection based on strategic priorities."
-                onAskMarbim={onAskMarbim}
-                size="sm"
-              />
-            </div>
-            {isLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#EAB308]"></div>
-              </div>
-            ) : (
-              <SmartTable
-                columns={quotationScenariosColumns}
-                data={scenarios}
-                searchPlaceholder="Search scenarios..."
-                onRowClick={handleRowClick}
-              />
-            )}
-          </div>
-
-          {/* Scenario Analytics Grid */}
-          <div className="grid grid-cols-2 gap-6">
-            {/* Margin vs Win Probability Chart */}
-            <div className="bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10 rounded-xl p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <h4 className="text-white mb-1 flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-[#57ACAF]" />
-                    Margin vs Win Probability
-                  </h4>
-                  <p className="text-sm text-[#6F83A7]">Historical correlation analysis</p>
-                </div>
-                <MarbimAIButton
-                  marbimPrompt="Analyze the margin-win probability correlation across all scenarios. Data shows inverse relationship: 8% margin = 65% win rate, 12% margin = 72% win rate (optimal sweet spot), 18% margin = 58% win rate (premium positioning but lower conversion). Provide: 1) Statistical analysis of the margin-win probability curve, 2) Identification of optimal margin sweet spot for this buyer, 3) Competitive intelligence on market pricing levels, 4) Margin elasticity analysis (how much can we increase margin before win rate drops significantly), 5) Value-based pricing opportunities to justify higher margins, 6) Buyer-specific margin tolerance based on relationship strength, 7) Scenario B recommendation validation with supporting data."
-                  onAskMarbim={onAskMarbim}
-                  size="sm"
-                />
-              </div>
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={[
-                  { scenario: 'C (8%)', margin: 8, winProb: 65 },
-                  { scenario: 'B (12%)', margin: 12, winProb: 72 },
-                  { scenario: 'A (18%)', margin: 18, winProb: 58 },
-                ]}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
-                  <XAxis dataKey="scenario" stroke="#6F83A7" tick={{ fill: '#6F83A7', fontSize: 11 }} />
-                  <YAxis stroke="#6F83A7" tick={{ fill: '#6F83A7', fontSize: 12 }} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#0D1117',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: '12px',
-                    }}
-                    formatter={(value: any, name: string) => {
-                      if (name === 'winProb') return [`${value}%`, 'Win Probability'];
-                      if (name === 'margin') return [`${value}%`, 'Margin'];
-                      return [value, name];
-                    }}
-                  />
-                  <Line type="monotone" dataKey="winProb" stroke="#57ACAF" strokeWidth={3} dot={{ fill: '#57ACAF', r: 6 }} />
-                </LineChart>
-              </ResponsiveContainer>
-              <div className="mt-4 p-3 rounded-lg bg-[#57ACAF]/5 border border-[#57ACAF]/20">
-                <div className="text-xs text-[#57ACAF] mb-1">Optimal Sweet Spot</div>
-                <div className="text-sm text-white">12% margin maximizes win probability at 72%</div>
-              </div>
-            </div>
-
-            {/* Lead Time Impact */}
-            <div className="bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10 rounded-xl p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <h4 className="text-white mb-1 flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-[#EAB308]" />
-                    Lead Time Analysis
-                  </h4>
-                  <p className="text-sm text-[#6F83A7]">Production timeline comparison</p>
-                </div>
-                <MarbimAIButton
-                  marbimPrompt="Analyze lead time impact on scenario competitiveness. Scenario breakdown: A - 45 days (standard, low competitive risk), B - 35 days (FAST, high competitive advantage), C - 50 days (extended, may impact buyer urgency). Buyer's historical acceptance: typically 30-40 day range. Production capacity analysis needed. Provide: 1) Lead time competitiveness assessment vs market standards, 2) Production line allocation strategy for 35-day commitment (Scenario B), 3) Risk analysis of missing lead time commitments, 4) Buyer urgency assessment and timeline sensitivity, 5) Premium pricing justification for faster delivery if applicable, 6) Capacity planning implications for each scenario, 7) Alternative lead time options with minimal impact on win probability."
-                  onAskMarbim={onAskMarbim}
-                  size="sm"
-                />
-              </div>
-              <div className="space-y-3">
-                {[
-                  { scenario: 'Scenario B - 35 days', status: 'Optimal', color: '#57ACAF', desc: 'Fastest turnaround, high buyer appeal' },
-                  { scenario: 'Scenario A - 45 days', status: 'Standard', color: '#6F83A7', desc: 'Industry average, safe commitment' },
-                  { scenario: 'Scenario C - 50 days', status: 'Extended', color: '#EAB308', desc: 'May reduce buyer urgency' },
-                ].map((item, index) => (
-                  <div key={index} className="p-4 rounded-lg bg-white/5 border border-white/10">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-sm text-white">{item.scenario}</div>
-                      <Badge className="border-none" style={{ backgroundColor: `${item.color}20`, color: item.color }}>
-                        {item.status}
-                      </Badge>
-                    </div>
-                    <div className="text-xs text-[#6F83A7]">{item.desc}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* AI Margin Optimization Insight */}
-          <div className="p-6 rounded-xl bg-gradient-to-br from-[#EAB308]/10 to-[#EAB308]/5 border border-[#EAB308]/20">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-start gap-3 flex-1">
-                <div className="w-10 h-10 rounded-lg bg-[#EAB308]/20 flex items-center justify-center flex-shrink-0">
-                  <Sparkles className="w-5 h-5 text-[#EAB308]" />
-                </div>
-                <div className="flex-1">
-                  <h4 className="text-white mb-2">AI Margin Optimization & Scenario Recommendation</h4>
-                  <p className="text-sm text-[#6F83A7] mb-3">
-                    MARBIM recommends <span className="text-[#EAB308]">Scenario B (Competitive)</span> based on comprehensive analysis of historical win/loss data, buyer preferences, and competitive positioning. This scenario offers optimal balance between profitability (12% margin) and high win probability (72%).
-                  </p>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">Recommended Margin</div>
-                      <div className="text-lg text-[#EAB308]">12%</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">Expected Win Rate</div>
-                      <div className="text-lg text-[#57ACAF]">72%</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">Projected Revenue</div>
-                      <div className="text-lg text-white">$45.8K</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <MarbimAIButton
-                marbimPrompt="Provide comprehensive scenario optimization analysis for this quotation. Context: 3 scenarios built (Premium/Competitive/Budget), Scenario B recommended by AI (12% margin, $5.85 FOB, 35d lead time, 72% win probability). Buyer historical data: typically accepts 10-15% margins, 30-40 day lead times, prefers value positioning over premium. Provide: 1) Detailed rationale for Scenario B recommendation with supporting data, 2) Risk/reward analysis for each scenario with quantified expected values, 3) Sensitivity analysis: how changes in margin, price, or lead time affect win probability, 4) Alternative scenario suggestions (e.g., hybrid approaches), 5) Negotiation strategy if buyer pushes back on pricing, 6) Contingency plans if Scenario B doesn't close, 7) Long-term strategic implications of each scenario choice, 8) Competitive intelligence on likely competitor positioning."
-                onAskMarbim={onAskMarbim}
-                size="sm"
-              />
-            </div>
-          </div>
-
-          {/* Fabric & Material Impact Analysis */}
-          <div className="bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10 rounded-xl p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <h4 className="text-white mb-1 flex items-center gap-2">
-                  <Package className="w-5 h-5 text-[#57ACAF]" />
-                  Fabric Choice Impact Analysis
-                </h4>
-                <p className="text-sm text-[#6F83A7]">Material selection effect on buyer perception and cost</p>
-              </div>
-              <MarbimAIButton
-                marbimPrompt="Analyze fabric choice impact on scenario competitiveness and buyer acceptance. Scenario fabrics: A - Organic Cotton (premium positioning, sustainability benefit, +$0.40 cost), B - Standard Cotton (balanced quality/cost, buyer's typical preference), C - Blended Cotton (cost-effective, slight quality trade-off, -$0.35 savings). Buyer sustainability initiatives: Medium priority. Provide: 1) Fabric cost-benefit analysis for each scenario, 2) Buyer's fabric preferences based on historical orders, 3) Sustainability positioning opportunities with Organic Cotton, 4) Quality perception and brand alignment for each fabric type, 5) Price premium justification strategies for higher-quality fabrics, 6) Supply chain availability and lead time implications, 7) Alternative fabric recommendations that balance cost, quality, and sustainability, 8) Competitive fabric positioning in the market."
-                onAskMarbim={onAskMarbim}
-                size="sm"
-              />
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              {[
-                { name: 'Organic Cotton', scenario: 'A', cost: '+$0.40', benefit: 'Sustainability appeal', color: '#57ACAF' },
-                { name: 'Standard Cotton', scenario: 'B', cost: 'Baseline', benefit: 'Buyer preference', color: '#EAB308' },
-                { name: 'Blended Cotton', scenario: 'C', cost: '-$0.35', benefit: 'Cost savings', color: '#6F83A7' },
-              ].map((fabric, index) => (
-                <div key={index} className="p-4 rounded-lg bg-white/5 border border-white/10">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="text-sm text-white">{fabric.name}</div>
-                    <Badge className="border-none" style={{ backgroundColor: `${fabric.color}20`, color: fabric.color }}>
-                      Scenario {fabric.scenario}
-                    </Badge>
-                  </div>
-                  <div className="space-y-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[#6F83A7]">Cost Impact</span>
-                      <span className="text-white">{fabric.cost}</span>
-                    </div>
-                    <div className="text-[#6F83A7]">{fabric.benefit}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="approval-workflow" className="space-y-6">
-          {/* Workflow Status Overview */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div className="p-5 rounded-xl bg-gradient-to-br from-[#57ACAF]/10 to-[#57ACAF]/5 border border-[#57ACAF]/20">
-              <div className="flex items-center gap-3 mb-2">
-                <CheckCircle2 className="w-5 h-5 text-[#57ACAF]" />
-                <div className="text-[#6F83A7] text-sm">Completed</div>
-              </div>
-              <div className="text-3xl text-white mb-1">2</div>
-              <div className="text-xs text-[#6F83A7]">Approvals done</div>
-            </div>
-            <div className="p-5 rounded-xl bg-gradient-to-br from-[#EAB308]/10 to-[#EAB308]/5 border border-[#EAB308]/20">
-              <div className="flex items-center gap-3 mb-2">
-                <Clock className="w-5 h-5 text-[#EAB308]" />
-                <div className="text-[#6F83A7] text-sm">Active</div>
-              </div>
-              <div className="text-3xl text-[#EAB308] mb-1">1</div>
-              <div className="text-xs text-[#6F83A7]">Director review</div>
-            </div>
-            <div className="p-5 rounded-xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10">
-              <div className="flex items-center gap-3 mb-2">
-                <Activity className="w-5 h-5 text-white" />
-                <div className="text-[#6F83A7] text-sm">Pending</div>
-              </div>
-              <div className="text-3xl text-white mb-1">2</div>
-              <div className="text-xs text-[#6F83A7]">Next stages</div>
-            </div>
-            <div className="p-5 rounded-xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10">
-              <div className="flex items-center gap-3 mb-2">
-                <TrendingUp className="w-5 h-5 text-white" />
-                <div className="text-[#6F83A7] text-sm">Avg Time</div>
-              </div>
-              <div className="text-3xl text-white mb-1">1.2d</div>
-              <div className="text-xs text-[#57ACAF]">Per approval</div>
-            </div>
-            <div className="p-5 rounded-xl bg-gradient-to-br from-[#57ACAF]/10 to-[#57ACAF]/5 border border-[#57ACAF]/20">
-              <div className="flex items-center gap-3 mb-2">
-                <Shield className="w-5 h-5 text-[#57ACAF]" />
-                <div className="text-[#6F83A7] text-sm">Compliance</div>
-              </div>
-              <div className="text-3xl text-[#57ACAF] mb-1">✓</div>
-              <div className="text-xs text-[#6F83A7]">All checks passed</div>
-            </div>
-          </div>
-
-          {/* Workflow Progress Stepper */}
-          <Collapsible defaultOpen>
-            <CollapsibleTrigger className="w-full">
-              <div className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors">
-                <div className="flex items-center gap-3 flex-1">
-                  <CheckSquare className="w-5 h-5 text-[#EAB308]" />
-                  <div className="flex-1 text-left">
-                    <div className="text-white">Approval Trail & Workflow Progress</div>
-                    <div className="text-xs text-[#6F83A7]">Step 3 of 5: Director Approval (In Progress)</div>
-                  </div>
-                </div>
-                <ChevronDown className="w-5 h-5 text-[#6F83A7]" />
-              </div>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div className="mt-4 p-6 bg-white/5 border border-white/10 rounded-xl">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <p className="text-sm text-[#6F83A7]">Multi-level approval workflow ensuring proper authorization and compliance validation</p>
-                  </div>
-                  <MarbimAIButton
-                    marbimPrompt="Analyze approval workflow efficiency and bottlenecks. Current workflow: 5 stages (Merchandiser Review → Manager Approval → Director Approval → Quote Generation → Buyer Submission). Status: 2 completed (Merchandiser, Manager), 1 active (Director - in progress), 2 pending. Avg time per approval: 1.2 days. Total elapsed: 2.4 days so far. Provide: 1) Workflow efficiency analysis and benchmark comparison, 2) Bottleneck identification in approval chain, 3) Director approval delay assessment and escalation recommendations, 4) Historical approval patterns for this type of quote, 5) Parallel approval opportunities to reduce cycle time, 6) Automated approval criteria where human review isn't critical, 7) SLA compliance tracking and risk of missing deadlines, 8) Process optimization recommendations to streamline approvals."
-                    onAskMarbim={onAskMarbim}
-                    size="sm"
-                  />
-                </div>
-                <WorkflowStepper
-                  steps={[
-                    { label: 'Merchandiser Review', status: 'completed' },
-                    { label: 'Manager Approval', status: 'completed' },
-                    { label: 'Director Approval', status: 'active' },
-                    { label: 'Quote Generation', status: 'pending' },
-                    { label: 'Buyer Submission', status: 'pending' },
-                  ]}
-                />
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-
-          {/* Approval Details Cards */}
-          <div className="space-y-4">
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="text-white mb-1">Approval Details & Signoffs</h3>
-                <p className="text-sm text-[#6F83A7]">Complete approval trail with timestamps and reviewer notes</p>
-              </div>
-              <MarbimAIButton
-                marbimPrompt="Analyze approval feedback and decision patterns. Approvals completed: Merchandiser (Oct 25, 'Margins look good'), Manager (Oct 26, 'Lead time acceptable'). Director approval: Pending (awaiting decision). Historical context: similar quotes typically approved by Director in 0.8-1.5 days. No rejections in approval chain so far. Provide: 1) Analysis of approver feedback and any concerns raised, 2) Prediction of Director approval likelihood and timing, 3) Risk factors that might cause Director to reject or request changes, 4) Recommended proactive actions to facilitate approval, 5) Escalation strategy if Director approval delayed beyond SLA, 6) Alternative approval paths or delegated authority options, 7) Approval quality assessment: are approvers catching key issues?, 8) Recommendations to improve approval process based on feedback patterns."
-                onAskMarbim={onAskMarbim}
-                size="sm"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {[
-                { 
-                  approver: 'Merchandiser', 
-                  name: 'Sarah M.', 
-                  status: 'Approved', 
-                  date: '2024-10-25 10:45 AM', 
-                  duration: '4.2 hours',
-                  notes: 'Margins look good. Scenario B recommendation aligns with buyer historical preferences. No concerns raised.',
-                  concerns: []
-                },
-                { 
-                  approver: 'Manager', 
-                  name: 'John K.', 
-                  status: 'Approved', 
-                  date: '2024-10-26 2:30 PM', 
-                  duration: '6.5 hours',
-                  notes: 'Lead time acceptable. Production capacity confirmed for 35-day commitment. Proceed with confidence.',
-                  concerns: []
-                },
-                { 
-                  approver: 'Director', 
-                  name: 'Michael R.', 
-                  status: 'Pending', 
-                  date: 'In Progress', 
-                  duration: '18 hours elapsed',
-                  notes: 'Awaiting final review and authorization. Expected decision by Oct 27 5:00 PM.',
-                  concerns: ['High-value quote requires executive review']
-                },
-              ].map((approval, index) => (
-                <div key={index} className={`bg-gradient-to-br ${approval.status === 'Approved' ? 'from-[#57ACAF]/10 to-[#57ACAF]/5 border-[#57ACAF]/20' : 'from-[#EAB308]/10 to-[#EAB308]/5 border-[#EAB308]/20'} border rounded-xl p-6`}>
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <div className="text-white mb-1">{approval.approver}</div>
-                      <div className="text-sm text-[#6F83A7]">{approval.name}</div>
-                    </div>
-                    <Badge className={approval.status === 'Approved' ? 'bg-[#57ACAF]/20 text-[#57ACAF] border border-[#57ACAF]/30' : 'bg-[#EAB308]/20 text-[#EAB308] border border-[#EAB308]/30'}>
-                      {approval.status}
-                    </Badge>
-                  </div>
-                  <div className="space-y-3 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[#6F83A7]">Date/Time</span>
-                      <span className="text-white text-xs">{approval.date}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[#6F83A7]">Duration</span>
-                      <span className="text-white">{approval.duration}</span>
-                    </div>
-                    <div className="pt-2 border-t border-white/10">
-                      <div className="text-[#6F83A7] mb-2 text-xs">Reviewer Notes:</div>
-                      <div className="text-white text-xs leading-relaxed">{approval.notes}</div>
-                    </div>
-                    {approval.concerns.length > 0 && (
-                      <div className="pt-2 border-t border-white/10">
-                        <div className="text-[#EAB308] mb-2 text-xs flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3" />
-                          Considerations:
-                        </div>
-                        {approval.concerns.map((concern, i) => (
-                          <div key={i} className="text-xs text-[#6F83A7]">• {concern}</div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Compliance Validation Panel */}
-          <div className="p-6 rounded-xl bg-gradient-to-br from-[#57ACAF]/10 to-[#57ACAF]/5 border border-[#57ACAF]/20">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-start gap-3 flex-1">
-                <div className="w-10 h-10 rounded-lg bg-[#57ACAF]/20 flex items-center justify-center flex-shrink-0">
-                  <Shield className="w-5 h-5 text-[#57ACAF]" />
-                </div>
-                <div className="flex-1">
-                  <h4 className="text-white mb-2">AI Compliance Validation & Pre-Submission Checks</h4>
-                  <p className="text-sm text-[#6F83A7] mb-3">
-                    MARBIM validates that all compliance requirements and costing thresholds are met before final submission. <span className="text-[#57ACAF]">All checks passed ✓</span> - quote ready for submission upon Director approval.
-                  </p>
-                  <div className="grid grid-cols-4 gap-3">
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="flex items-center gap-2 mb-1">
-                        <CheckCircle2 className="w-4 h-4 text-[#57ACAF]" />
-                        <div className="text-xs text-[#6F83A7]">Margin Policy</div>
-                      </div>
-                      <div className="text-sm text-[#57ACAF]">Passed</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="flex items-center gap-2 mb-1">
-                        <CheckCircle2 className="w-4 h-4 text-[#57ACAF]" />
-                        <div className="text-xs text-[#6F83A7]">Cost Accuracy</div>
-                      </div>
-                      <div className="text-sm text-[#57ACAF]">Verified</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="flex items-center gap-2 mb-1">
-                        <CheckCircle2 className="w-4 h-4 text-[#57ACAF]" />
-                        <div className="text-xs text-[#6F83A7]">Approval Chain</div>
-                      </div>
-                      <div className="text-sm text-[#57ACAF]">Valid</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="flex items-center gap-2 mb-1">
-                        <CheckCircle2 className="w-4 h-4 text-[#57ACAF]" />
-                        <div className="text-xs text-[#6F83A7]">Documentation</div>
-                      </div>
-                      <div className="text-sm text-[#57ACAF]">Complete</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <MarbimAIButton
-                marbimPrompt="Analyze compliance validation and pre-submission readiness. Compliance checks performed: 1) Margin Policy Compliance (✓ Passed - 12% margin within 8-20% policy range), 2) Cost Accuracy Verification (✓ Verified - BOM validated, no missing line items), 3) Approval Chain Integrity (✓ Valid - proper authorization hierarchy followed), 4) Documentation Completeness (✓ Complete - all required attachments present). Overall status: READY FOR SUBMISSION upon Director approval. Provide: 1) Detailed compliance validation report with all check results, 2) Risk assessment of any edge cases or gray areas in compliance, 3) Historical compliance issues for similar quotes and lessons learned, 4) Automated vs manual validation breakdown, 5) Recommendations to strengthen compliance processes, 6) Post-submission monitoring requirements, 7) Escalation procedures if compliance issues discovered after submission, 8) Audit trail documentation for compliance reporting."
-                onAskMarbim={onAskMarbim}
-                size="sm"
-              />
-            </div>
-          </div>
-
-          {/* Approval Timeline & SLA Tracking */}
-          <div className="bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10 rounded-xl p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <h4 className="text-white mb-1 flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-[#EAB308]" />
-                  Approval Timeline & SLA Performance
-                </h4>
-                <p className="text-sm text-[#6F83A7]">Time tracking and deadline adherence across approval stages</p>
-              </div>
-              <MarbimAIButton
-                marbimPrompt="Analyze approval timeline and SLA performance. Timeline breakdown: Merchandiser (4.2 hours - within 6h SLA ✓), Manager (6.5 hours - within 8h SLA ✓), Director (18 hours elapsed, 24h SLA - on track). Total elapsed: 28.7 hours (2.4 days). Target total cycle time: 3 days (72 hours). Current pace: on track to meet deadline. Historical avg: 2.8 days for similar quotes. Provide: 1) SLA compliance analysis for each stage and overall workflow, 2) Bottleneck identification and time-consuming approval factors, 3) Forecast of final approval completion time with confidence intervals, 4) Risk assessment of missing SLA deadlines, 5) Comparison to historical approval timelines for benchmarking, 6) Recommendations to accelerate approval without compromising quality, 7) Early warning indicators for approval delays, 8) Process improvements to reduce cycle time."
-                onAskMarbim={onAskMarbim}
-                size="sm"
-              />
-            </div>
-            <div className="space-y-3">
-              {[
-                { stage: 'Merchandiser Review', target: '6 hours', actual: '4.2 hours', status: 'On Time', variance: '-30%', color: '#57ACAF' },
-                { stage: 'Manager Approval', target: '8 hours', actual: '6.5 hours', status: 'On Time', variance: '-19%', color: '#57ACAF' },
-                { stage: 'Director Approval', target: '24 hours', actual: '18h elapsed', status: 'In Progress', variance: 'On track', color: '#EAB308' },
-                { stage: 'Quote Generation', target: '4 hours', actual: 'Pending', status: 'Not Started', variance: '-', color: '#6F83A7' },
-                { stage: 'Buyer Submission', target: '2 hours', actual: 'Pending', status: 'Not Started', variance: '-', color: '#6F83A7' },
-              ].map((item, index) => (
-                <div key={index} className="flex items-center justify-between p-4 rounded-lg bg-white/5 border border-white/10">
-                  <div className="flex items-center gap-4 flex-1">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
-                    <div className="flex-1">
-                      <div className="text-sm text-white mb-1">{item.stage}</div>
-                      <div className="text-xs text-[#6F83A7]">Target: {item.target}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <div className="text-right">
-                      <div className="text-sm text-white">{item.actual}</div>
-                      <div className="text-xs" style={{ color: item.color }}>{item.variance}</div>
-                    </div>
-                    <Badge className="border-none min-w-[90px] justify-center" style={{ backgroundColor: `${item.color}20`, color: item.color }}>
-                      {item.status}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 p-4 rounded-lg bg-[#57ACAF]/5 border border-[#57ACAF]/20">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-xs text-[#6F83A7] mb-1">Overall Progress</div>
-                  <div className="text-sm text-white">40% complete • 2.4 days elapsed • Est. completion: Oct 27</div>
-                </div>
-                <div className="text-2xl text-[#57ACAF]">On Track ✓</div>
-              </div>
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="comparative-analytics" className="space-y-6">
-          {/* Comprehensive Comparison Table */}
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
-            <div className="flex items-start justify-between mb-6">
-              <div className="flex-1">
-                <h3 className="text-white mb-1">Comprehensive Scenario Comparison Matrix</h3>
-                <p className="text-sm text-[#6F83A7]">Side-by-side analysis of all pricing, margin, and operational parameters</p>
-              </div>
-              <MarbimAIButton
-                marbimPrompt="Provide comprehensive comparative analysis across all 3 quotation scenarios. Scenario A (Premium): 18% margin, $6.25 FOB, 45d lead time, Organic Cotton, 58% win prob. Scenario B (Competitive - RECOMMENDED): 12% margin, $5.85 FOB, 35d lead time, Standard Cotton, 72% win prob. Scenario C (Budget): 8% margin, $5.50 FOB, 50d lead time, Blended Cotton, 65% win prob. Provide: 1) Multi-dimensional comparison highlighting trade-offs between scenarios, 2) Expected value calculation for each scenario (win prob × potential revenue × margin), 3) Risk-adjusted return analysis considering production risk, buyer risk, margin risk, 4) Scenario sensitivity analysis: what happens if variables change?, 5) Strategic positioning: when to use each scenario (premium buyers vs price-sensitive), 6) Competitive landscape: how do these scenarios compare to market?, 7) Decision matrix framework for scenario selection, 8) Hybrid scenario possibilities combining best elements."
-                onAskMarbim={onAskMarbim}
-                size="sm"
-              />
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-white/10">
-                    <th className="text-left text-[#6F83A7] py-4 px-4 font-normal">Criteria</th>
-                    <th className="text-left text-white py-4 px-4">Scenario A<br/><span className="text-xs text-[#6F83A7] font-normal">Premium</span></th>
-                    <th className="text-left text-white py-4 px-4">Scenario B<br/><span className="text-xs text-[#EAB308] font-normal">Recommended ✓</span></th>
-                    <th className="text-left text-white py-4 px-4">Scenario C<br/><span className="text-xs text-[#6F83A7] font-normal">Budget</span></th>
-                  </tr>
-                </thead>
-                <tbody className="text-sm">
-                  <tr className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                    <td className="py-4 px-4 text-[#6F83A7]">
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="w-4 h-4" />
-                        Margin %
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 text-white">18%</td>
-                    <td className="py-4 px-4 text-[#57ACAF] font-medium">12% ✓</td>
-                    <td className="py-4 px-4 text-white">8%</td>
-                  </tr>
-                  <tr className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                    <td className="py-4 px-4 text-[#6F83A7]">
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="w-4 h-4" />
-                        FOB Price
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 text-white">$6.25</td>
-                    <td className="py-4 px-4 text-[#57ACAF] font-medium">$5.85 ✓</td>
-                    <td className="py-4 px-4 text-white">$5.50</td>
-                  </tr>
-                  <tr className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                    <td className="py-4 px-4 text-[#6F83A7]">
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4" />
-                        Lead Time
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 text-white">45 days</td>
-                    <td className="py-4 px-4 text-[#57ACAF] font-medium">35 days ✓</td>
-                    <td className="py-4 px-4 text-white">50 days</td>
-                  </tr>
-                  <tr className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                    <td className="py-4 px-4 text-[#6F83A7]">
-                      <div className="flex items-center gap-2">
-                        <Package className="w-4 h-4" />
-                        Fabric Choice
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 text-white">Organic Cotton</td>
-                    <td className="py-4 px-4 text-[#57ACAF] font-medium">Standard Cotton ✓</td>
-                    <td className="py-4 px-4 text-white">Blended Cotton</td>
-                  </tr>
-                  <tr className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                    <td className="py-4 px-4 text-[#6F83A7]">
-                      <div className="flex items-center gap-2">
-                        <Target className="w-4 h-4" />
-                        Win Probability
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 text-white">58%</td>
-                    <td className="py-4 px-4 text-[#57ACAF] font-medium">72% ✓</td>
-                    <td className="py-4 px-4 text-white">65%</td>
-                  </tr>
-                  <tr className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                    <td className="py-4 px-4 text-[#6F83A7]">
-                      <div className="flex items-center gap-2">
-                        <Calculator className="w-4 h-4" />
-                        Expected Value
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 text-white">$26.5K</td>
-                    <td className="py-4 px-4 text-[#57ACAF] font-medium">$33.0K ✓</td>
-                    <td className="py-4 px-4 text-white">$28.6K</td>
-                  </tr>
-                  <tr className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                    <td className="py-4 px-4 text-[#6F83A7]">
-                      <div className="flex items-center gap-2">
-                        <TrendingUp className="w-4 h-4" />
-                        Revenue Potential
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 text-white">$45.7K</td>
-                    <td className="py-4 px-4 text-[#57ACAF] font-medium">$45.8K ✓</td>
-                    <td className="py-4 px-4 text-white">$44.0K</td>
-                  </tr>
-                  <tr className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                    <td className="py-4 px-4 text-[#6F83A7]">
-                      <div className="flex items-center gap-2">
-                        <Activity className="w-4 h-4" />
-                        Production Risk
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <Badge className="bg-[#6F83A7]/10 text-[#6F83A7] border border-[#6F83A7]/20">Medium</Badge>
-                    </td>
-                    <td className="py-4 px-4">
-                      <Badge className="bg-[#EAB308]/10 text-[#EAB308] border border-[#EAB308]/20">Moderate ✓</Badge>
-                    </td>
-                    <td className="py-4 px-4">
-                      <Badge className="bg-[#57ACAF]/10 text-[#57ACAF] border border-[#57ACAF]/20">Low</Badge>
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-white/5 transition-colors">
-                    <td className="py-4 px-4 text-[#6F83A7]">
-                      <div className="flex items-center gap-2">
-                        <Award className="w-4 h-4" />
-                        Positioning
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 text-white">Premium/Sustainability</td>
-                    <td className="py-4 px-4 text-[#57ACAF] font-medium">Value/Balanced ✓</td>
-                    <td className="py-4 px-4 text-white">Cost-Competitive</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Visual Comparison Charts */}
-          <div className="grid grid-cols-2 gap-6">
-            {/* Expected Value Comparison */}
-            <div className="bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10 rounded-xl p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <h4 className="text-white mb-1 flex items-center gap-2">
-                    <BarChart3 className="w-5 h-5 text-[#57ACAF]" />
-                    Expected Value Analysis
-                  </h4>
-                  <p className="text-sm text-[#6F83A7]">Risk-adjusted revenue potential (win prob × revenue × margin)</p>
-                </div>
-                <MarbimAIButton
-                  marbimPrompt="Analyze expected value calculations across scenarios. Methodology: Expected Value = Win Probability × Potential Revenue × Gross Margin. Results: Scenario A: 58% × $45.7K × 18% = $26.5K, Scenario B: 72% × $45.8K × 12% = $33.0K (HIGHEST), Scenario C: 65% × $44.0K × 8% = $28.6K. Scenario B delivers highest expected value despite lower margin due to superior win probability and pricing optimization. Provide: 1) Validation of expected value calculation methodology, 2) Sensitivity analysis: how EV changes with ±5% in variables, 3) Confidence intervals around expected value estimates, 4) Break-even analysis: at what win probability does each scenario become optimal?, 5) Risk-adjusted returns considering downside scenarios, 6) Portfolio approach: mix of scenarios to maximize overall expected value, 7) Monte Carlo simulation results for probabilistic outcomes, 8) Strategic recommendations based on expected value framework."
-                  onAskMarbim={onAskMarbim}
-                  size="sm"
-                />
-              </div>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={[
-                  { scenario: 'A', value: 26.5, color: '#6F83A7' },
-                  { scenario: 'B', value: 33.0, color: '#57ACAF' },
-                  { scenario: 'C', value: 28.6, color: '#EAB308' },
-                ]}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
-                  <XAxis dataKey="scenario" stroke="#6F83A7" tick={{ fill: '#6F83A7' }} />
-                  <YAxis stroke="#6F83A7" tick={{ fill: '#6F83A7' }} label={{ value: 'Expected Value ($K)', angle: -90, position: 'insideLeft', fill: '#6F83A7' }} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#0D1117',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: '12px',
-                    }}
-                    formatter={(value: any) => [`$${value}K`, 'Expected Value']}
-                  />
-                  <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                    {[0, 1, 2].map((index) => (
-                      <Cell key={`cell-${index}`} fill={index === 0 ? '#6F83A7' : index === 1 ? '#57ACAF' : '#EAB308'} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-              <div className="mt-4 p-3 rounded-lg bg-[#57ACAF]/5 border border-[#57ACAF]/20">
-                <div className="text-xs text-[#57ACAF] mb-1">Winner: Scenario B</div>
-                <div className="text-sm text-white">$33.0K expected value (+24% vs Scenario A)</div>
-              </div>
-            </div>
-
-            {/* Multi-Factor Radar/Spider Chart */}
-            <div className="bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10 rounded-xl p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <h4 className="text-white mb-1 flex items-center gap-2">
-                    <Target className="w-5 h-5 text-[#EAB308]" />
-                    Multi-Factor Scoring
-                  </h4>
-                  <p className="text-sm text-[#6F83A7]">Weighted evaluation across key decision criteria</p>
-                </div>
-                <MarbimAIButton
-                  marbimPrompt="Analyze multi-factor scoring framework for scenario evaluation. Scoring criteria and weights: Win Probability (30% weight), Margin/Profitability (25%), Lead Time Competitiveness (20%), Cost/Pricing (15%), Strategic Fit (10%). Normalized scores (0-100): Scenario A: Win Prob 58, Margin 90, Lead Time 75, Price 60, Strategy 85 → Weighted: 70.9. Scenario B: Win Prob 72, Margin 60, Lead Time 95, Price 75, Strategy 80 → Weighted: 76.3 (HIGHEST). Scenario C: Win Prob 65, Margin 40, Lead Time 50, Price 90, Strategy 60 → Weighted: 61.0. Provide: 1) Validation of scoring criteria and weight allocation, 2) Alternative weighting scenarios based on strategic priorities, 3) Sensitivity of results to weight changes, 4) Qualitative factors not captured in quantitative scoring, 5) Scenario ranking under different weighting schemes, 6) Decision tree analysis for scenario selection, 7) Stakeholder perspective differences (sales vs finance), 8) Recommendations for framework refinement."
-                  onAskMarbim={onAskMarbim}
-                  size="sm"
-                />
-              </div>
-              <div className="space-y-3">
-                {[
-                  { scenario: 'Scenario B', score: 76.3, factors: 'High win prob, fast lead time, balanced margin', color: '#57ACAF' },
-                  { scenario: 'Scenario A', score: 70.9, factors: 'Premium margin, sustainability angle', color: '#6F83A7' },
-                  { scenario: 'Scenario C', score: 61.0, factors: 'Lowest price, conservative approach', color: '#EAB308' },
-                ].map((item, index) => (
-                  <div key={index} className="p-4 rounded-lg bg-white/5 border border-white/10">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="text-sm text-white">{item.scenario}</div>
-                      <div className="text-lg" style={{ color: item.color }}>{item.score}</div>
-                    </div>
-                    <Progress value={item.score} className="h-2 mb-2" />
-                    <div className="text-xs text-[#6F83A7]">{item.factors}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* AI Strategic Recommendation */}
-          <div className="p-6 rounded-xl bg-gradient-to-br from-[#EAB308]/10 to-[#EAB308]/5 border border-[#EAB308]/20">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-start gap-3 flex-1">
-                <div className="w-10 h-10 rounded-lg bg-[#EAB308]/20 flex items-center justify-center flex-shrink-0">
-                  <Sparkles className="w-5 h-5 text-[#EAB308]" />
-                </div>
-                <div className="flex-1">
-                  <h4 className="text-white mb-2">AI Strategic Recommendation & Decision Rationale</h4>
-                  <p className="text-sm text-[#6F83A7] mb-3">
-                    Based on comprehensive comparative analysis, <span className="text-[#EAB308]">Scenario B (Competitive)</span> is the optimal choice for this buyer. It delivers the highest expected value ($33.0K), superior win probability (72%), and best alignment with buyer's historical preferences for 10-15% margins and 30-40 day lead times. While Scenario A offers higher margin, its premium positioning reduces conversion likelihood. Scenario C sacrifices too much profitability for marginal pricing advantage.
-                  </p>
-                  <div className="grid grid-cols-4 gap-3">
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">Recommendation</div>
-                      <div className="text-sm text-[#EAB308]">Scenario B</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">Confidence</div>
-                      <div className="text-sm text-[#57ACAF]">High (87%)</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">Expected Value</div>
-                      <div className="text-sm text-white">$33.0K</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">Risk Level</div>
-                      <div className="text-sm text-[#EAB308]">Moderate</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <MarbimAIButton
-                marbimPrompt="Provide detailed strategic recommendation and decision rationale for scenario selection. Complete analysis: Scenario B recommended based on highest expected value ($33.0K, +24% vs A, +15% vs C), optimal win probability (72%, +14 pts vs A, +7 pts vs C), strong buyer alignment (historical 10-15% margin acceptance, 30-40d lead time preference), balanced risk profile (moderate production risk, high win confidence). Trade-off analysis: Scenario A higher margin but 14% lower win rate (premium positioning not justified for this buyer). Scenario C marginal price advantage but 4% lower margin cuts profitability significantly. Provide: 1) Comprehensive decision rationale with supporting data and logic, 2) Risk factors and mitigation strategies for recommended scenario, 3) Alternative scenarios to consider if buyer pushes back, 4) Negotiation strategy and concession limits, 5) Success metrics and KPIs to track post-submission, 6) Contingency planning if Scenario B doesn't convert, 7) Long-term strategic implications of scenario choice, 8) Competitive positioning and differentiation approach, 9) Executive summary for leadership approval."
-                onAskMarbim={onAskMarbim}
-                size="sm"
-              />
-            </div>
-          </div>
-
-          {/* Scenario Trade-off Matrix */}
-          <div className="bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10 rounded-xl p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <h4 className="text-white mb-1 flex items-center gap-2">
-                  <Layers className="w-5 h-5 text-[#57ACAF]" />
-                  Scenario Trade-off Analysis
-                </h4>
-                <p className="text-sm text-[#6F83A7]">Key compromises and advantages across scenarios</p>
-              </div>
-              <MarbimAIButton
-                marbimPrompt="Analyze trade-offs and strategic compromises across all scenarios. Scenario A Trade-offs: GAIN: +6% margin (+$2.7K profit), sustainability positioning, premium brand alignment. LOSE: -14% win probability, -$6.5K expected value, higher buyer resistance risk. Scenario B Trade-offs: GAIN: +14% win prob vs A, fastest lead time (35d competitive advantage), optimal expected value, buyer preference alignment. LOSE: -6% margin vs A, standard positioning (not differentiated). Scenario C Trade-offs: GAIN: Lowest price ($5.50, highest competitive pressure), lowest production risk (50d buffer), cost-effective approach. LOSE: -4% margin (significant profitability sacrifice), longest lead time (buyer may perceive as slow), -7% win prob vs B. Provide: 1) Detailed trade-off matrices with quantified impacts, 2) Strategic implications of each trade-off choice, 3) Buyer-specific trade-off preferences based on relationship history, 4) Market context: which trade-offs matter most in current environment?, 5) Long-term vs short-term trade-off considerations, 6) Hybrid scenarios combining favorable trade-offs, 7) Decision framework for evaluating trade-offs, 8) Stakeholder alignment on trade-off priorities."
-                onAskMarbim={onAskMarbim}
-                size="sm"
-              />
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              {[
-                {
-                  scenario: 'Scenario A',
-                  gains: ['Highest margin (+6%)', 'Premium positioning', 'Sustainability appeal'],
-                  losses: ['Lower win rate (-14%)', 'Price resistance risk', 'Lower expected value'],
-                  color: '#6F83A7'
-                },
-                {
-                  scenario: 'Scenario B ✓',
-                  gains: ['Highest win prob (+14%)', 'Fastest lead time', 'Best expected value'],
-                  losses: ['Moderate margin', 'Standard positioning'],
-                  color: '#57ACAF'
-                },
-                {
-                  scenario: 'Scenario C',
-                  gains: ['Lowest price', 'Low prod risk', 'Cost competitive'],
-                  losses: ['Lowest margin (-4%)', 'Longest lead time', 'Profitability sacrifice'],
-                  color: '#EAB308'
-                }
-              ].map((item, index) => (
-                <div key={index} className="p-5 rounded-lg bg-white/5 border border-white/10">
-                  <div className="text-white mb-4 flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                    {item.scenario}
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <div className="text-xs text-[#57ACAF] mb-2 flex items-center gap-1">
-                        <TrendingUp className="w-3 h-3" />
-                        Advantages
-                      </div>
-                      <div className="space-y-1">
-                        {item.gains.map((gain, i) => (
-                          <div key={i} className="text-xs text-[#6F83A7]">• {gain}</div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="pt-2 border-t border-white/10">
-                      <div className="text-xs text-[#D0342C] mb-2 flex items-center gap-1">
-                        <TrendingDown className="w-3 h-3" />
-                        Trade-offs
-                      </div>
-                      <div className="space-y-1">
-                        {item.losses.map((loss, i) => (
-                          <div key={i} className="text-xs text-[#6F83A7]">• {loss}</div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="ai-insights" className="space-y-6">
-          <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-12 text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#EAB308]/10">
-              <Sparkles className="h-6 w-6 text-[#EAB308]" />
-            </div>
-            <h3 className="text-white text-lg font-medium">AI insights appear here as you work</h3>
-            <p className="mt-2 mx-auto max-w-md text-sm text-[#6F83A7]">
-              As RFQs, quotes and clarifications flow through the platform, MARBIM analyzes them and
-              surfaces trends, bottlenecks and recommendations here. Ask MARBIM anytime for an on-demand read.
+    return (
+      <>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-white mb-1">Quotation Builder</h2>
+            <p className="text-sm text-[#6F83A7]">
+              Priced responses to buyer RFQs — MARBIM drafts the costs, the engine computes FOB.
             </p>
           </div>
-        </TabsContent>
-      </Tabs>
-    </>
-  );
+          <Button
+            className="bg-[#EAB308] hover:bg-[#EAB308]/90 text-black"
+            onClick={() => router.push('/rfq-quotation/rfq-inbox')}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            New quote from an RFQ
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          {kpis.map((k) => (
+            <div key={k.label} className="p-5 rounded-xl bg-white/5 border border-white/10">
+              <div className="flex items-center gap-2 mb-2">
+                <k.icon className="w-4 h-4" style={{ color: k.color }} />
+                <span className="text-xs text-[#6F83A7]">{k.label}</span>
+              </div>
+              <div className="text-2xl text-white">{k.value}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mb-6 flex items-start gap-2 rounded-xl border border-[#57ACAF]/20 bg-[#57ACAF]/5 px-4 py-3 text-sm text-[#6F83A7]">
+          <Sparkles className="mt-0.5 h-4 w-4 text-[#57ACAF] shrink-0" />
+          <span>
+            The number is real, not guessed: <span className="text-white">FOB = (Material + Labor + Overhead
+            + Freight) ÷ (1 − Margin%)</span>. MARBIM proposes the cost lines; the engine computes the FOB.
+          </span>
+        </div>
+
+        <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+          <h3 className="text-white mb-4">Quotes</h3>
+          <SmartTable
+            columns={cols}
+            data={rows}
+            loading={quotesLoading}
+            emptyMessage="No quotes yet. Open an RFQ and click 'Draft quote with MARBIM' — the priced quote lands in your Approve inbox, then appears here."
+            searchPlaceholder="Search quotes..."
+          />
+        </div>
+      </>
+    );
+  };
 
   const renderClarificationTracker = () => (
     <>
