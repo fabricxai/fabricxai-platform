@@ -448,18 +448,14 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
   }
 
   async function loadScenarios() {
+    // Zero-state: scenarios aren't wired to real data yet, so a fresh company
+    // sees none (no more mock seeding). Real quote-scenario data comes in a later pass.
     try {
       const data = await db.getByModule(MODULE_NAMES.RFQ_QUOTATION);
       const scenarioData = data.filter((item: any) => item.type === 'scenario');
-      
-      if (scenarioData.length === 0) {
-        await seedInitialScenarios();
-      } else {
-        setScenarios(scenarioData);
-      }
-    } catch (error) {
-      console.error('Failed to load scenarios:', error);
-      toast.error('Failed to load scenarios');
+      setScenarios(scenarioData);
+    } catch {
+      setScenarios([]);
     }
   }
 
@@ -1370,7 +1366,7 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
               </div>
             </div>
 
-            {needsClarificationData.map((rfq) => (
+            {needsClarification.map((rfq) => (
               <div key={rfq.id} className="p-5 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10 hover:bg-white/10 transition-all duration-180">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
@@ -1627,7 +1623,7 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
               </div>
             </div>
 
-            {readyForCostingData.map((rfq, index) => (
+            {readyForCosting.map((rfq, index) => (
               <div key={rfq.id} className="p-5 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10 hover:bg-white/10 transition-all duration-180">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
@@ -1918,7 +1914,7 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
               </div>
             </div>
 
-            {quotedData.map((rfq, index) => {
+            {quoted.map((rfq, index) => {
               const winProb = index === 0 ? 85 : index === 1 ? 72 : index === 2 ? 68 : index === 3 ? 48 : 45;
               const isHighProb = winProb >= 70;
               const isAtRisk = winProb < 50;
@@ -3955,7 +3951,7 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
             </div>
             <SmartTable
               columns={openClarificationsColumns}
-              data={openClarificationsData}
+              data={[]}
               searchPlaceholder="Search clarifications..."
               onRowClick={handleRowClick}
             />
@@ -4195,7 +4191,7 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
             </div>
             <SmartTable
               columns={resolvedClarificationsColumns}
-              data={resolvedClarificationsData}
+              data={[]}
               searchPlaceholder="Search resolved clarifications..."
               onRowClick={handleRowClick}
             />
