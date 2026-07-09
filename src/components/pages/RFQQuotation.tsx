@@ -959,24 +959,11 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
               <h4 className="text-white">Quick Actions</h4>
               <Zap className="w-4 h-4 text-[#EAB308]" />
             </div>
-            <div className="space-y-2">
-              <Button 
-                size="sm" 
-                className="w-full bg-gradient-to-r from-[#EAB308] to-[#EAB308]/80 text-black hover:from-[#EAB308]/90 hover:to-[#EAB308]/70"
-                onClick={() => toast.info('Opening clarification wizard')}
-              >
-                <Send className="w-3 h-3 mr-2" />
-                Send Clarifications (8)
-              </Button>
-              <Button 
-                size="sm" 
-                variant="outline"
-                className="w-full border-white/10 text-white bg-transparent hover:bg-white/5"
-                onClick={() => toast.info('Opening costing queue')}
-              >
-                <Calculator className="w-3 h-3 mr-2" />
-                Review Costing Queue (15)
-              </Button>
+            <div className="rounded-lg border border-dashed border-white/10 px-4 py-6 text-center">
+              <p className="text-sm text-[#6F83A7]">No actions need your attention right now.</p>
+              <p className="mt-1 text-xs text-[#6F83A7]/70">
+                Clarifications and costing tasks appear here as RFQs come in.
+              </p>
             </div>
           </div>
         </div>
@@ -2180,29 +2167,11 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
                 </div>
                 <div className="flex-1">
                   <h4 className="text-white mb-2">AI-Powered RFQ Intelligence Summary</h4>
-                  <p className="text-sm text-[#6F83A7] mb-4">
-                    MARBIM has analyzed 38 active RFQs across all stages. Key findings: <span className="text-[#57ACAF]">Processing efficiency improved 18% this month</span> 
-                    with 94% AI parsing accuracy. <span className="text-[#EAB308]">2 critical bottlenecks identified</span> in fabric sourcing and approval workflow. 
-                    Win rate trending up to <span className="text-[#57ACAF]">68% (+5%)</span> with improved quote competitiveness.
+                  <p className="text-sm text-[#6F83A7]">
+                    MARBIM will summarize your RFQ pipeline here — processing efficiency, bottlenecks,
+                    and win-rate trends — once there&apos;s enough activity to analyze. Ask MARBIM
+                    anytime for an on-demand read.
                   </p>
-                  <div className="grid grid-cols-4 gap-3">
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">Total Active RFQs</div>
-                      <div className="text-2xl text-white">38</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">AI Efficiency Gain</div>
-                      <div className="text-2xl text-[#57ACAF]">18%</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">Critical Issues</div>
-                      <div className="text-2xl text-[#EAB308]">2</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <div className="text-xs text-[#6F83A7] mb-1">Win Rate</div>
-                      <div className="text-2xl text-[#57ACAF]">68%</div>
-                    </div>
-                  </div>
                 </div>
               </div>
               <MarbimAIButton
