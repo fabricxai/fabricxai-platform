@@ -232,14 +232,45 @@ export function ApprovalDetailDrawer({
               <p className="text-sm text-[#6F83A7] leading-relaxed">{approval.description}</p>
             </div>
 
-            {/* Details */}
-            <div className="bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10 rounded-xl p-6">
-              <h3 className="text-white font-medium mb-3 flex items-center gap-2">
-                <FileCheck className="w-4 h-4 text-[#57ACAF]" />
-                Full Details
-              </h3>
-              <p className="text-sm text-[#6F83A7] leading-relaxed">{approval.details}</p>
-            </div>
+            {/* Full details — the drafted record, rendered as fields (not raw JSON) */}
+            {(() => {
+              const payload = approval?._raw?.payload as Record<string, unknown> | undefined;
+              const entries = payload
+                ? Object.entries(payload).filter(
+                    ([k, v]) =>
+                      v !== null &&
+                      v !== undefined &&
+                      v !== '' &&
+                      !['source', 'company_id', 'created_by'].includes(k),
+                  )
+                : [];
+              const labelize = (k: string) =>
+                k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+              const format = (v: unknown) =>
+                typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v);
+              return (
+                <div className="bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10 rounded-xl p-6">
+                  <h3 className="text-white font-medium mb-4 flex items-center gap-2">
+                    <FileCheck className="w-4 h-4 text-[#57ACAF]" />
+                    Full Details
+                  </h3>
+                  {entries.length > 0 ? (
+                    <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                      {entries.map(([k, v]) => (
+                        <div key={k} className="flex flex-col">
+                          <dt className="text-xs text-[#6F83A7]">{labelize(k)}</dt>
+                          <dd className="text-sm text-white break-words">{format(v)}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : (
+                    <p className="text-sm text-[#6F83A7] leading-relaxed">
+                      {approval.description || 'No additional details.'}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Approval Chain */}
             <div className="bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10 rounded-xl p-6">
