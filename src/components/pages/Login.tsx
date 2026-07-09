@@ -18,13 +18,60 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Checkbox } from "../ui/checkbox";
+import { Textarea } from "../ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "../ui/dialog";
 import { toast } from "sonner";
+
+/** Official brand marks (inline so they stay crisp and need no external assets). */
+function GoogleIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden>
+      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.76h3.56c2.08-1.92 3.28-4.74 3.28-8.09Z" />
+      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.56-2.76c-.98.66-2.23 1.06-3.72 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23Z" />
+      <path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.22V7.04H2.18a11 11 0 0 0 0 9.9l3.66-2.84Z" />
+      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 7.04l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38Z" />
+    </svg>
+  );
+}
+function LinkedInIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="#0A66C2" aria-hidden>
+      <path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.13 1.45-2.13 2.94v5.67H9.35V9h3.42v1.56h.05c.48-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29ZM5.34 7.43a2.07 2.07 0 1 1 0-4.14 2.07 2.07 0 0 1 0 4.14ZM7.12 20.45H3.56V9h3.56v11.45ZM22.22 0H1.77C.8 0 0 .78 0 1.75v20.5C0 23.22.8 24 1.77 24h20.45c.98 0 1.78-.78 1.78-1.75V1.75C24 .78 23.2 0 22.22 0Z" />
+    </svg>
+  );
+}
 
 interface LoginProps {
   /** Real Supabase sign-in. Resolves to an error message, or null on success. */
   onLogin: (email: string, password: string) => Promise<string | null>;
   onNavigateToSignup: () => void;
 }
+
+interface DemoForm {
+  companyName: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  country: string;
+  companySize: string;
+  message: string;
+}
+const EMPTY_DEMO: DemoForm = {
+  companyName: "",
+  contactName: "",
+  email: "",
+  phone: "",
+  country: "",
+  companySize: "",
+  message: "",
+};
 
 const FEATURES = [
   { icon: Brain, label: "AI-Powered Intelligence", color: "#EAB308" },
@@ -40,15 +87,36 @@ export function Login({ onLogin, onNavigateToSignup }: LoginProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleDemoMode = async () => {
-    setIsLoading(true);
-    const error = await onLogin("demo@fabricxai.com", "demo1234");
-    if (error) {
-      toast.error("Demo account not available yet — please sign up.");
-      setIsLoading(false);
+  const [demoOpen, setDemoOpen] = useState(false);
+  const [demoForm, setDemoForm] = useState<DemoForm>(EMPTY_DEMO);
+  const [demoSubmitting, setDemoSubmitting] = useState(false);
+
+  const setDemo = (field: keyof DemoForm, value: string) =>
+    setDemoForm((prev) => ({ ...prev, [field]: value }));
+
+  const handleDemoSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!demoForm.companyName.trim() || !demoForm.email.includes("@")) {
+      toast.error("Please enter your company name and a valid work email.");
       return;
     }
-    toast.success("Welcome to the FabricXAI demo!");
+    setDemoSubmitting(true);
+    try {
+      const res = await fetch("/api/demo-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(demoForm),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not submit request");
+      toast.success("Thanks! We'll email your demo credentials shortly.");
+      setDemoForm(EMPTY_DEMO);
+      setDemoOpen(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not submit request");
+    } finally {
+      setDemoSubmitting(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -174,7 +242,7 @@ export function Login({ onLogin, onNavigateToSignup }: LoginProps) {
               New organization?{" "}
               <button
                 type="button"
-                onClick={handleDemoMode}
+                onClick={() => setDemoOpen(true)}
                 className="text-[#57ACAF] hover:underline"
               >
                 Request demo access
@@ -301,18 +369,18 @@ export function Login({ onLogin, onNavigateToSignup }: LoginProps) {
                 type="button"
                 variant="outline"
                 onClick={() => toast.info("Google sign-in coming soon.")}
-                className="h-11 border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.06]"
+                className="h-11 gap-2 border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.06]"
               >
-                <span className="mr-2 font-semibold text-[#EA4335]">G</span>
+                <GoogleIcon className="w-4 h-4" />
                 Google
               </Button>
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => toast.info("LinkedIn sign-in coming soon.")}
-                className="h-11 border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.06]"
+                className="h-11 gap-2 border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.06]"
               >
-                <span className="mr-2 font-semibold text-[#0A66C2]">in</span>
+                <LinkedInIcon className="w-4 h-4" />
                 LinkedIn
               </Button>
             </div>
@@ -332,15 +400,15 @@ export function Login({ onLogin, onNavigateToSignup }: LoginProps) {
             <Button
               type="button"
               variant="outline"
-              onClick={handleDemoMode}
-              disabled={isLoading}
+              onClick={() => setDemoOpen(true)}
               className="w-full h-11 border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.06]"
             >
               <Rocket className="w-4 h-4 mr-2 text-[#EAB308]" />
               Request demo access (email credentials)
             </Button>
 
-            <p className="mt-5 text-center text-xs text-[#6F83A7]">
+            {/* Mobile-only: full signup lives on desktop. Hidden on desktop, where signup is available here. */}
+            <p className="lg:hidden mt-5 text-center text-xs text-[#6F83A7]">
               Company onboarding (profile + modules) is on{" "}
               <button
                 type="button"
@@ -354,6 +422,97 @@ export function Login({ onLogin, onNavigateToSignup }: LoginProps) {
           </div>
         </motion.div>
       </div>
+
+      {/* Request demo access — collects the prospect's company details */}
+      <Dialog open={demoOpen} onOpenChange={setDemoOpen}>
+        <DialogContent className="sm:max-w-md bg-[#0F1420] border-white/10 text-white">
+          <DialogHeader>
+            <DialogTitle>Request demo access</DialogTitle>
+            <DialogDescription className="text-[#6F83A7]">
+              Tell us about your company and we&apos;ll email your demo credentials.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleDemoSubmit} className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-sm text-white/90">Company name *</Label>
+              <Input
+                value={demoForm.companyName}
+                onChange={(e) => setDemo("companyName", e.target.value)}
+                placeholder="Acme Garments Ltd"
+                className="bg-white/5 border-white/10 text-white placeholder:text-[#6F83A7]"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-sm text-white/90">Your name</Label>
+                <Input
+                  value={demoForm.contactName}
+                  onChange={(e) => setDemo("contactName", e.target.value)}
+                  placeholder="Full name"
+                  className="bg-white/5 border-white/10 text-white placeholder:text-[#6F83A7]"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm text-white/90">Work email *</Label>
+                <Input
+                  type="email"
+                  value={demoForm.email}
+                  onChange={(e) => setDemo("email", e.target.value)}
+                  placeholder="you@company.com"
+                  className="bg-white/5 border-white/10 text-white placeholder:text-[#6F83A7]"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-sm text-white/90">Phone</Label>
+                <Input
+                  value={demoForm.phone}
+                  onChange={(e) => setDemo("phone", e.target.value)}
+                  placeholder="+880…"
+                  className="bg-white/5 border-white/10 text-white placeholder:text-[#6F83A7]"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm text-white/90">Country</Label>
+                <Input
+                  value={demoForm.country}
+                  onChange={(e) => setDemo("country", e.target.value)}
+                  placeholder="Bangladesh"
+                  className="bg-white/5 border-white/10 text-white placeholder:text-[#6F83A7]"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm text-white/90">Company size</Label>
+              <Input
+                value={demoForm.companySize}
+                onChange={(e) => setDemo("companySize", e.target.value)}
+                placeholder="e.g. 500–1,000 workers"
+                className="bg-white/5 border-white/10 text-white placeholder:text-[#6F83A7]"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm text-white/90">Anything we should know?</Label>
+              <Textarea
+                value={demoForm.message}
+                onChange={(e) => setDemo("message", e.target.value)}
+                placeholder="What would you like to see in the demo?"
+                className="min-h-[72px] bg-white/5 border-white/10 text-white placeholder:text-[#6F83A7]"
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="submit"
+                disabled={demoSubmitting}
+                className="w-full h-11 bg-gradient-to-r from-[#EAB308] to-[#F5C518] text-[#0D1117] font-medium hover:opacity-95"
+              >
+                {demoSubmitting ? "Submitting…" : "Request demo access"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
