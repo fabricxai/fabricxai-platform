@@ -56,13 +56,6 @@ import {
 } from 'recharts';
 
 // Dashboard Data
-const dashboardSummary = [
-  { label: 'Needs Clarification', value: 8, icon: HelpCircle, color: '#EAB308' },
-  { label: 'Ready for Costing', value: 15, icon: Calculator, color: '#57ACAF' },
-  { label: 'Quoted', value: 24, icon: FileCheck, color: '#6F83A7' },
-  { label: 'Win Rate', value: '68%', icon: TrendingUp, color: '#57ACAF' },
-];
-
 const conversionByBuyerData = [
   { buyer: 'H&M', quoted: 45, won: 32, rate: 71 },
   { buyer: 'Zara', quoted: 38, won: 28, rate: 74 },
@@ -70,154 +63,9 @@ const conversionByBuyerData = [
   { buyer: 'Nike', quoted: 22, won: 14, rate: 64 },
 ];
 
-const conversionByProductData = [
-  { product: 'T-Shirts', rate: 75, color: '#57ACAF' },
-  { product: 'Denim', rate: 68, color: '#EAB308' },
-  { product: 'Activewear', rate: 72, color: '#6F83A7' },
-  { product: 'Outerwear', rate: 58, color: '#9333EA' },
-];
-
 // RFQ Inbox Data
-const allRFQsData = [
-  {
-    id: 1,
-    rfqId: 'RFQ-2024-1847',
-    buyer: 'H&M',
-    productType: 'Cotton T-Shirts',
-    receivedDate: '2024-10-25',
-    status: 'Needs Clarification',
-    owner: 'Sarah M.',
-  },
-  {
-    id: 2,
-    rfqId: 'RFQ-2024-1848',
-    buyer: 'Zara',
-    productType: 'Denim Jeans',
-    receivedDate: '2024-10-24',
-    status: 'Ready for Costing',
-    owner: 'John D.',
-  },
-  {
-    id: 3,
-    rfqId: 'RFQ-2024-1849',
-    buyer: 'Gap',
-    productType: 'Polo Shirts',
-    receivedDate: '2024-10-23',
-    status: 'Quoted',
-    owner: 'Lisa K.',
-  },
-  {
-    id: 4,
-    rfqId: 'RFQ-2024-1850',
-    buyer: 'Nike',
-    productType: 'Activewear Set',
-    receivedDate: '2024-10-22',
-    status: 'Closed - Won',
-    owner: 'Mike R.',
-  },
-  {
-    id: 5,
-    rfqId: 'RFQ-2024-1851',
-    buyer: 'ACME Fashion',
-    productType: 'Hoodies',
-    receivedDate: '2024-10-20',
-    status: 'Closed - Lost',
-    owner: 'Sarah M.',
-  },
-];
-
-const needsClarificationData = allRFQsData.filter(r => r.status === 'Needs Clarification');
-const readyForCostingData = allRFQsData.filter(r => r.status === 'Ready for Costing');
-const quotedData = allRFQsData.filter(r => r.status === 'Quoted');
-
 // Clarification Tracker Data
-const openClarificationsData = [
-  {
-    id: 1,
-    clarificationId: 'CLR-2024-421',
-    buyer: 'H&M',
-    rfqId: 'RFQ-2024-1847',
-    question: 'Missing GSM specification for main fabric',
-    dateSent: '2024-10-26',
-    status: 'Pending',
-    responseDue: '2024-10-28',
-  },
-  {
-    id: 2,
-    clarificationId: 'CLR-2024-422',
-    buyer: 'ACME Fashion',
-    rfqId: 'RFQ-2024-1851',
-    question: 'Wash test method not specified',
-    dateSent: '2024-10-24',
-    status: 'Overdue',
-    responseDue: '2024-10-26',
-  },
-  {
-    id: 3,
-    clarificationId: 'CLR-2024-423',
-    buyer: 'Gap',
-    rfqId: 'RFQ-2024-1849',
-    question: 'Label placement requirements missing',
-    dateSent: '2024-10-25',
-    status: 'Pending',
-    responseDue: '2024-10-27',
-  },
-];
-
-const resolvedClarificationsData = [
-  {
-    id: 1,
-    clarificationId: 'CLR-2024-418',
-    buyer: 'Zara',
-    rfqId: 'RFQ-2024-1848',
-    question: 'Color swatch confirmation needed',
-    dateSent: '2024-10-20',
-    dateResolved: '2024-10-22',
-    responseTime: '2 days',
-  },
-  {
-    id: 2,
-    clarificationId: 'CLR-2024-415',
-    buyer: 'Nike',
-    rfqId: 'RFQ-2024-1850',
-    question: 'Stretch percentage clarification',
-    dateSent: '2024-10-18',
-    dateResolved: '2024-10-19',
-    responseTime: '1 day',
-  },
-];
-
 // Quotation Builder Data
-const quotationScenariosData = [
-  {
-    id: 1,
-    scenario: 'Scenario A - Premium',
-    margin: 18,
-    fob: 6.25,
-    leadTime: 45,
-    fabricChoice: 'Organic Cotton',
-    status: 'Active',
-  },
-  {
-    id: 2,
-    scenario: 'Scenario B - Competitive',
-    margin: 12,
-    fob: 5.85,
-    leadTime: 35,
-    fabricChoice: 'Standard Cotton',
-    status: 'Recommended',
-  },
-  {
-    id: 3,
-    scenario: 'Scenario C - Budget',
-    margin: 8,
-    fob: 5.50,
-    leadTime: 50,
-    fabricChoice: 'Blended Cotton',
-    status: 'Active',
-  },
-];
-
 // Helper function to generate DetailDrawerData for RFQs
 const generateRFQDrawerData = (rfq: any, subPage: string, onAskMarbim?: (prompt: string) => void): DetailDrawerData => {
   return {
@@ -427,13 +275,6 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
     ? Math.round((closedWon.length / (closedWon.length + closedLost.length || 1)) * 100)
     : 0;
 
-  const computedDashboardSummary = [
-    { label: 'Needs Clarification', value: needsClarification.length, icon: HelpCircle, color: '#EAB308' },
-    { label: 'Ready for Costing', value: readyForCosting.length, icon: Calculator, color: '#57ACAF' },
-    { label: 'Quoted', value: quoted.length, icon: FileCheck, color: '#6F83A7' },
-    { label: 'Win Rate', value: `${winRate}%`, icon: TrendingUp, color: '#57ACAF' },
-  ];
-
   // Update view when initialSubPage changes
   useEffect(() => {
     setCurrentView(initialSubPage);
@@ -462,25 +303,6 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
   }, []);
 
   // Database Operations
-  async function loadRFQs() {
-    try {
-      setIsLoading(true);
-      const data = await db.getByModule(MODULE_NAMES.RFQ_QUOTATION);
-      const rfqData = data.filter((item: any) => item.type === 'rfq');
-      
-      if (rfqData.length === 0) {
-        await seedInitialRFQs();
-      } else {
-        setRfqs(rfqData);
-      }
-    } catch (error) {
-      console.error('Failed to load RFQs:', error);
-      toast.error('Failed to load RFQs');
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
   async function loadScenarios() {
     // Zero-state: scenarios aren't wired to real data yet, so a fresh company
     // sees none (no more mock seeding). Real quote-scenario data comes in a later pass.
@@ -491,34 +313,6 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
     } catch {
       setScenarios([]);
     }
-  }
-
-  async function seedInitialRFQs() {
-    const initialRFQs = allRFQsData.map(rfq => ({
-      ...rfq,
-      type: 'rfq',
-    }));
-    
-    for (const rfq of initialRFQs) {
-      const id = `rfq-${rfq.id}-${Date.now()}`;
-      await db.store(id, rfq, MODULE_NAMES.RFQ_QUOTATION);
-    }
-    
-    setRfqs(initialRFQs);
-  }
-
-  async function seedInitialScenarios() {
-    const initialScenarios = quotationScenariosData.map(scenario => ({
-      ...scenario,
-      type: 'scenario',
-    }));
-    
-    for (const scenario of initialScenarios) {
-      const id = `scenario-${scenario.id}-${Date.now()}`;
-      await db.store(id, scenario, MODULE_NAMES.RFQ_QUOTATION);
-    }
-    
-    setScenarios(initialScenarios);
   }
 
   async function handleRFQUpdated(updatedRFQ: any) {
@@ -598,55 +392,8 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
   ];
 
   // Open Clarifications Columns
-  const openClarificationsColumns: Column[] = [
-    { key: 'buyer', label: 'Buyer', sortable: true },
-    { key: 'rfqId', label: 'RFQ ID', sortable: true },
-    { key: 'question', label: 'Question' },
-    { key: 'dateSent', label: 'Date Sent', sortable: true },
-    {
-      key: 'status',
-      label: 'Status',
-      render: (value) => {
-        const colors: any = {
-          'Pending': 'bg-[#EAB308]/10 text-[#EAB308]',
-          'Overdue': 'bg-[#D0342C]/10 text-[#D0342C]',
-        };
-        return <Badge className={colors[value]}>{value}</Badge>;
-      },
-    },
-    { key: 'responseDue', label: 'Response Due', sortable: true },
-  ];
-
   // Resolved Clarifications Columns
-  const resolvedClarificationsColumns: Column[] = [
-    { key: 'buyer', label: 'Buyer', sortable: true },
-    { key: 'rfqId', label: 'RFQ ID' },
-    { key: 'question', label: 'Question' },
-    { key: 'dateSent', label: 'Date Sent', sortable: true },
-    { key: 'dateResolved', label: 'Date Resolved', sortable: true },
-    { key: 'responseTime', label: 'Response Time' },
-  ];
-
   // Quotation Scenarios Columns
-  const quotationScenariosColumns: Column[] = [
-    { key: 'scenario', label: 'Scenario', sortable: true },
-    { key: 'margin', label: 'Margin %', sortable: true, render: (value) => `${value}%` },
-    { key: 'fob', label: 'FOB Price', sortable: true, render: (value) => `$${value}` },
-    { key: 'leadTime', label: 'Lead Time', sortable: true, render: (value) => `${value} days` },
-    { key: 'fabricChoice', label: 'Fabric Choice' },
-    {
-      key: 'status',
-      label: 'Status',
-      render: (value) => {
-        const colors: any = {
-          'Active': 'bg-[#6F83A7]/10 text-[#6F83A7]',
-          'Recommended': 'bg-[#EAB308]/10 text-[#EAB308]',
-        };
-        return <Badge className={colors[value]}>{value}</Badge>;
-      },
-    },
-  ];
-
   const hasDemoData = liveRfqs.some((r) => r.is_demo);
   const handleClearDemo = async () => {
     toast.loading('Clearing demo data…', { id: 'clear-demo' });
