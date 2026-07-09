@@ -30,12 +30,14 @@ interface SmartTableProps {
   loading?: boolean;
 }
 
-export function SmartTable({ 
-  columns, 
-  data, 
+export function SmartTable({
+  columns,
+  data,
   onRowClick,
   searchable = true,
-  searchPlaceholder = "Search..."
+  searchPlaceholder = "Search...",
+  emptyMessage = "No data found",
+  loading = false
 }: SmartTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
@@ -125,9 +127,12 @@ export function SmartTable({
         </Table>
       </div>
 
-      {sortedData.length === 0 && (
-        <div className="text-center py-12 text-[#6F83A7]">
-          No data found
+      {loading && sortedData.length === 0 && (
+        <div className="text-center py-12 text-[#6F83A7]">Loading…</div>
+      )}
+      {!loading && sortedData.length === 0 && (
+        <div className="mx-auto max-w-md text-center py-12 text-sm text-[#6F83A7]">
+          {emptyMessage}
         </div>
       )}
     </div>
