@@ -19,20 +19,20 @@ Supabase project `aqnrnbdnhekkbimaoewp` wiped clean of the sibling schema, then 
 | Legacy fallback removed | ✅ | `info.tsx` no longer hardcodes the old project |
 
 ### Production domain
-The hosted app lives at **`https://platform.fabricxai.com`**. Set this everywhere URLs are configured.
+The hosted app lives at **`https://app.fabricxai.com`**. Set this everywhere URLs are configured.
 
 ### ⚠️ Supabase dashboard URL configuration
 **Authentication → URL Configuration**
-- **Site URL:** `https://platform.fabricxai.com` (production)
+- **Site URL:** `https://app.fabricxai.com` (production)
 - **Redirect URLs:** add BOTH
-  - `https://platform.fabricxai.com/**` (production — covers `/auth/confirm`)
+  - `https://app.fabricxai.com/**` (production — covers `/auth/confirm`)
   - `http://localhost:3000/**` (local dev)
 - **Authentication → Providers → Email:** confirm **"Confirm email" = ON**.
 - Default SMTP sends ~3–4 emails/hour — fine for testing. Add real SMTP before launch.
 
 ### Env per environment
 - Local dev `.env.local`: `NEXT_PUBLIC_APP_URL=http://localhost:3000`
-- Production: `NEXT_PUBLIC_APP_URL=https://platform.fabricxai.com`
+- Production: `NEXT_PUBLIC_APP_URL=https://app.fabricxai.com`
   (used by signup's `emailRedirectTo` → `${APP_URL}/auth/confirm`)
 
 ### Seeded login (created 2026-07-09, email pre-verified)
