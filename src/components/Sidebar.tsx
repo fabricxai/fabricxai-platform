@@ -1,5 +1,4 @@
 import image_e60a26e7718629a129c4e7a854b1f876925c041e from 'figma:asset/e60a26e7718629a129c4e7a854b1f876925c041e.png';
-import image_e60a26e7718629a129c4e7a854b1f876925c041e from 'figma:asset/e60a26e7718629a129c4e7a854b1f876925c041e.png';
 import image_37c5cc972080f780d91709f9ee5699e2549830d5 from 'figma:asset/37c5cc972080f780d91709f9ee5699e2549830d5.png';
 import { 
   Users, TrendingUp, Package, DollarSign, Leaf, Settings as SettingsIcon,
@@ -278,9 +277,9 @@ export function Sidebar({ currentPage, onNavigate, isCollapsed, onToggleCollapse
       <div className="h-16 flex items-center justify-between px-6 border-b border-white/5">
         {!isCollapsed && (
           <div className="flex items-center gap-3">
-            <img 
-              src={logoImage} 
-              alt="AI Logo" 
+            <img
+              src="/assets/fabricxai-logo-dark.png"
+              alt="fabricXai"
               className="h-8 w-auto object-contain"
             />
           </div>

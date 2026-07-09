@@ -12,6 +12,8 @@ import { QuoteScenarioDetailDrawer } from '../QuoteScenarioDetailDrawer';
 import { UploadRFQDrawer } from '../UploadRFQDrawer';
 import { CreateScenarioDrawer } from '../CreateScenarioDrawer';
 import { useDatabase, MODULE_NAMES, canPerformAction } from '../../utils/supabase';
+import { useRfqs, type Rfq } from '@/lib/data/rfqs';
+import { useRouter } from 'next/navigation';
 import { 
   FileText, TrendingUp, AlertTriangle, CheckCircle2, Eye, Edit, Search,
   Clock, ChevronDown, Plus, Download, Filter, Upload, Sparkles, Target,
@@ -327,9 +329,40 @@ interface RFQQuotationProps {
   isAIPanelOpen?: boolean;
 }
 
+// Map a real rfqs row → the inbox row shape the table/drawers expect.
+const RFQ_STATUS_LABEL: Record<Rfq['status'], string> = {
+  open: 'Ready for Costing',
+  quoted: 'Quoted',
+  won: 'Closed - Won',
+  lost: 'Closed - Lost',
+  cancelled: 'Closed - Lost',
+};
+function mapRfqToInbox(r: Rfq) {
+  return {
+    id: r.id,
+    rfqId: `RFQ-${r.id.slice(0, 8).toUpperCase()}`,
+    buyer: r.buyer?.company_name ?? '—',
+    productType: r.product_type ?? r.title,
+    receivedDate: r.created_at.slice(0, 10),
+    status: RFQ_STATUS_LABEL[r.status] ?? 'Ready for Costing',
+    owner: 'You',
+    type: 'rfq',
+    title: r.title,
+    quantity: r.quantity,
+    targetPrice: r.target_price,
+    currency: r.currency,
+    deadline: r.deadline,
+    description: r.description,
+    _raw: r,
+  };
+}
+
 export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpenAI, isAIPanelOpen }: RFQQuotationProps) {
   // Database hook
   const db = useDatabase();
+  // Live RFQs from Supabase (RLS-scoped to the company). Replaces localStorage seed.
+  const { data: liveRfqs, loading: rfqsLoading, refresh: refreshRfqs } = useRfqs();
+  const router = useRouter();
   
   // UI State
   const [currentView, setCurrentView] = useState<string>(initialSubPage);
@@ -383,9 +416,14 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
     }
   }, [isAIPanelOpen]);
 
-  // Load data from database on mount
+  // RFQs come live from Supabase; map them into the inbox shape.
   useEffect(() => {
-    loadRFQs();
+    setRfqs(liveRfqs.map(mapRfqToInbox));
+    setIsLoading(rfqsLoading);
+  }, [liveRfqs, rfqsLoading]);
+
+  // Scenarios still use the local store for now (Costing wave migrates them).
+  useEffect(() => {
     loadScenarios();
   }, []);
 
@@ -455,7 +493,7 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
 
   async function handleRFQUpdated(updatedRFQ: any) {
     try {
-      await loadRFQs();
+      await refreshRfqs();
       toast.success('RFQ updated successfully');
     } catch (error) {
       console.error('Failed to update RFQ:', error);
@@ -4995,6 +5033,10 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
         isOpen={uploadDrawerOpen}
         onClose={() => setUploadDrawerOpen(false)}
         onAskMarbim={onAskMarbim}
+        onExtracted={() => {
+          refreshRfqs();
+          router.push('/approve');
+        }}
       />
 
       {/* Create Scenario Drawer */}

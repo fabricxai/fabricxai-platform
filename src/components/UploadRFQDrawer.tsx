@@ -26,15 +26,46 @@ interface UploadRFQDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onAskMarbim: (prompt: string) => void;
+  /** Called after MARBIM drafts an RFQ into the Approve inbox. */
+  onExtracted?: () => void;
 }
 
-export function UploadRFQDrawer({ isOpen, onClose, onAskMarbim }: UploadRFQDrawerProps) {
+export function UploadRFQDrawer({ isOpen, onClose, onAskMarbim, onExtracted }: UploadRFQDrawerProps) {
   const [activeTab, setActiveTab] = useState('upload');
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingProgress, setProcessingProgress] = useState(0);
   const [aiParsedData, setAiParsedData] = useState<any>(null);
+  const [rawText, setRawText] = useState('');
+  const [isExtracting, setIsExtracting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Real MARBIM extraction: paste text → Gemini → a pending_changes DRAFT that
+  // shows up in the Approve inbox. Never writes the rfqs table directly.
+  const handleExtract = async () => {
+    if (rawText.trim().length < 10) {
+      toast.error("Paste the buyer's RFQ text first.");
+      return;
+    }
+    setIsExtracting(true);
+    try {
+      const res = await fetch('/api/extract/rfq', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: rawText }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Extraction failed');
+      toast.success('MARBIM drafted this RFQ — review & approve it in the Approve inbox.');
+      setRawText('');
+      onExtracted?.();
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Extraction failed');
+    } finally {
+      setIsExtracting(false);
+    }
+  };
 
   // Form state
   const [formData, setFormData] = useState({
@@ -286,6 +317,43 @@ export function UploadRFQDrawer({ isOpen, onClose, onAskMarbim }: UploadRFQDrawe
                         onChange={handleFileChange}
                         className="hidden"
                       />
+                    </div>
+
+                    {/* Paste text → MARBIM extract (real) */}
+                    <div className="p-5 rounded-xl bg-gradient-to-br from-[#EAB308]/10 to-[#57ACAF]/5 border border-[#EAB308]/20">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Sparkles className="w-4 h-4 text-[#EAB308]" />
+                        <h3 className="text-white text-sm">Or paste the buyer&apos;s email / RFQ text</h3>
+                      </div>
+                      <p className="text-xs text-[#6F83A7] mb-3">
+                        MARBIM reads it, drafts the RFQ, and sends it to your Approve inbox — you just
+                        review and approve.
+                      </p>
+                      <Textarea
+                        value={rawText}
+                        onChange={(e) => setRawText(e.target.value)}
+                        placeholder="Paste the buyer's message here — e.g. 'We'd like 5,000 organic cotton tees, 180 GSM, target $4.20/pc, delivery mid September…'"
+                        className="min-h-[120px] bg-white/5 border-white/10 text-white placeholder:text-[#6F83A7]/60"
+                      />
+                      <div className="mt-3 flex justify-end">
+                        <Button
+                          onClick={handleExtract}
+                          disabled={isExtracting}
+                          className="bg-gradient-to-r from-[#EAB308] to-[#57ACAF] text-black hover:opacity-90"
+                        >
+                          {isExtracting ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                              MARBIM is reading…
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-4 h-4 mr-2" />
+                              Draft RFQ with MARBIM
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     </div>
 
                     {/* Processing Progress */}

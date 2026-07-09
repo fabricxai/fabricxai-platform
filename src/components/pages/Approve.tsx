@@ -1,4 +1,8 @@
-import { useState } from 'react';
+'use client';
+
+import { useState, useMemo } from 'react';
+import { usePendingChanges, type PendingChange } from '@/lib/data/pending-changes';
+import { approvePendingChange, rejectPendingChange } from '@/app/actions/pending-changes';
 import { PageLayout } from '../PageLayout';
 import { KPICard } from '../KPICard';
 import { AICard, AIInsightItem } from '../AICard';
@@ -202,7 +206,7 @@ const columns: Column[] = [
   },
 ];
 
-const aiInsights: AIInsightItem[] = [
+const aiInsights = [
   {
     id: '1',
     type: 'recommendation',
@@ -245,11 +249,61 @@ const aiInsights: AIInsightItem[] = [
   },
 ];
 
+// Map a live pending_changes row → the shape this inbox renders. MARBIM / the
+// extraction flow write these rows; approving one commits it to its module table.
+function mapPendingChange(c: PendingChange) {
+  const daysWaiting = Math.max(
+    0,
+    Math.floor((Date.now() - new Date(c.created_at).getTime()) / 86_400_000),
+  );
+  const amount = (c.payload?.target_price ?? c.payload?.amount ?? c.payload?.fob_price) as
+    | number
+    | undefined;
+  return {
+    id: c.id,
+    title: c.summary ?? `${c.action} ${c.target_table}`,
+    type: c.module,
+    amount: amount != null ? `$${Number(amount).toLocaleString()}` : 'N/A',
+    status: (c.status.charAt(0).toUpperCase() + c.status.slice(1)) as
+      | 'Pending'
+      | 'Approved'
+      | 'Rejected',
+    requestedBy: c.source === 'manual' ? 'You' : 'MARBIM',
+    department: c.module,
+    submittedDate: c.created_at.slice(0, 10),
+    priority: (c.ai_confidence ?? 0) >= 0.8 ? 'Low' : daysWaiting >= 3 ? 'High' : 'Medium',
+    description: c.summary ?? '',
+    details: JSON.stringify(c.payload, null, 2),
+    approvalChain: 'MARBIM → You',
+    daysWaiting,
+    aiScore: Math.round((c.ai_confidence ?? 0) * 100),
+    _raw: c,
+  };
+}
+
 export function Approve() {
   const [selectedApproval, setSelectedApproval] = useState<any>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeView, setActiveView] = useState('all');
   const [aiInsightsOpen, setAiInsightsOpen] = useState(true);
+
+  // Live data — replaces the former hardcoded mock array (kept below only as
+  // dead reference during the module rollout; the inbox now reads real rows).
+  const { data: pendingChanges, loading, refresh: refreshPending } = usePendingChanges();
+  const approvalsData = useMemo(() => pendingChanges.map(mapPendingChange), [pendingChanges]);
+
+  const handleApprove = async (approval: any) => {
+    const res = await approvePendingChange(approval.id);
+    if (res.ok) toast.success('Approved — committed to your records.');
+    else toast.error(res.error);
+    await refreshPending();
+  };
+  const handleReject = async (approval: any, reason: string) => {
+    const res = await rejectPendingChange(approval.id, reason);
+    if (res.ok) toast.success('Rejected — nothing was written.');
+    else toast.error(res.error);
+    await refreshPending();
+  };
 
   const handleRowClick = (row: any) => {
     setSelectedApproval(row);
@@ -416,7 +470,13 @@ export function Approve() {
               <span className="text-xs text-[#6F83A7]">AI Score</span>
             </div>
             <p className="text-xl font-medium text-white">
-              {Math.round(approvalsData.reduce((sum, a) => sum + a.aiScore, 0) / approvalsData.length)}
+              {loading
+                ? '…'
+                : approvalsData.length === 0
+                  ? '—'
+                  : Math.round(
+                      approvalsData.reduce((sum, a) => sum + a.aiScore, 0) / approvalsData.length,
+                    )}
             </p>
             <p className="text-xs text-[#6F83A7] mt-1">Avg confidence</p>
           </div>
@@ -538,6 +598,8 @@ export function Approve() {
           approval={selectedApproval}
           onAskMarbim={handleAskMarbim}
           onOpenAI={handleOpenAI}
+          onApprove={selectedApproval?._raw ? handleApprove : undefined}
+          onReject={selectedApproval?._raw ? handleReject : undefined}
         />
       )}
     </PageLayout>

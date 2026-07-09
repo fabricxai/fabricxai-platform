@@ -20,11 +20,14 @@ export interface Column {
 }
 
 interface SmartTableProps {
+  title?: string;
   columns: Column[];
   data: any[];
   onRowClick?: (row: any) => void;
   searchable?: boolean;
   searchPlaceholder?: string;
+  emptyMessage?: string;
+  loading?: boolean;
 }
 
 export function SmartTable({ 

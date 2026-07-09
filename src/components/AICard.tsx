@@ -4,15 +4,17 @@ import { motion } from 'motion/react';
 import { cn } from './ui/utils';
 import { Button } from './ui/button';
 import { MarbimAIButton } from './MarbimAIButton';
-import marbimLogo from 'figma:asset/c71eace56b6821982da9dde651f71e10cdc44ea3.png';
 
 interface AICardProps {
   title: string;
   icon?: LucideIcon;
-  children: React.ReactNode;
+  children?: React.ReactNode;
   className?: string;
   marbimPrompt?: string;
   onAskMarbim?: (prompt: string) => void;
+  /** Alternative content API used by some inboxes (e.g. Approve). */
+  insights?: unknown[];
+  onActionClick?: (id: unknown) => void;
 }
 
 export function AICard({ title, icon: Icon = Sparkles, children, className, marbimPrompt, onAskMarbim }: AICardProps) {
@@ -33,9 +35,9 @@ export function AICard({ title, icon: Icon = Sparkles, children, className, marb
           className="absolute top-3 right-3 p-0 bg-transparent border-0 cursor-pointer transition-all duration-180 group z-10"
           title="Ask MARBIM AI Assistant"
         >
-          <img 
-            src={image_6b4cf6e4e338085095ecc8446ad35e7b17ea5cfe} 
-            alt="Ask MARBIM" 
+          <img
+            src="/assets/marbim.svg"
+            alt="Ask MARBIM"
             className="w-8 h-8 object-contain transition-transform duration-180 group-hover:scale-110"
           />
         </button>

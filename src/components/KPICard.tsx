@@ -7,6 +7,7 @@ interface KPICardProps {
   value: string | number;
   change?: number;
   changeLabel?: string;
+  subtitle?: string;
   icon: LucideIcon;
   trend?: 'up' | 'down' | 'neutral';
   onClick?: () => void;

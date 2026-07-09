@@ -34,14 +34,19 @@ interface ApprovalDetailDrawerProps {
   approval: any;
   onAskMarbim?: (prompt: string) => void;
   onOpenAI?: () => void;
+  /** Real commit/reject of the underlying pending change. */
+  onApprove?: (approval: any) => Promise<void> | void;
+  onReject?: (approval: any, reason: string) => Promise<void> | void;
 }
 
-export function ApprovalDetailDrawer({ 
-  isOpen, 
-  onClose, 
+export function ApprovalDetailDrawer({
+  isOpen,
+  onClose,
   approval,
   onAskMarbim,
-  onOpenAI
+  onOpenAI,
+  onApprove,
+  onReject
 }: ApprovalDetailDrawerProps) {
   const [activeTab, setActiveTab] = useState('overview');
   const [comment, setComment] = useState('');
@@ -56,14 +61,24 @@ export function ApprovalDetailDrawer({
     }
   };
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
+    if (onApprove) {
+      await onApprove(approval);
+      onClose();
+      return;
+    }
     toast.success('Request approved successfully');
     onClose();
   };
 
-  const handleReject = () => {
+  const handleReject = async () => {
     if (!comment.trim()) {
       toast.error('Please provide a reason for rejection');
+      return;
+    }
+    if (onReject) {
+      await onReject(approval, comment);
+      onClose();
       return;
     }
     toast.success('Request rejected');

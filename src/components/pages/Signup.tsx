@@ -6,11 +6,19 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Checkbox } from '../ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { projectId, publicAnonKey, supabaseUrl } from '../../utils/supabase/info';
 
 interface SignupProps {
-  onSignup: (email: string, role: string, name: string, company: string) => void;
+  /** Real Supabase sign-up. Resolves to an error message, or null on success. */
+  onSignup: (data: {
+    email: string;
+    password: string;
+    fullName: string;
+    companyName: string;
+    phone: string;
+    role: string;
+  }) => Promise<string | null>;
   onNavigateToLogin: () => void;
 }
 
@@ -64,43 +72,22 @@ export function Signup({ onSignup, onNavigateToLogin }: SignupProps) {
 
     setIsLoading(true);
 
-    try {
-      // Call Supabase signup endpoint
-      const response = await fetch(`${supabaseUrl}/functions/v1/make-server-1f923fcd/auth/signup`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${publicAnonKey}`,
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-          fullName: formData.fullName,
-          companyName: formData.companyName,
-          phone: formData.phone,
-          role: formData.role || 'manager',
-        }),
-      });
+    const error = await onSignup({
+      email: formData.email,
+      password: formData.password,
+      fullName: formData.fullName,
+      companyName: formData.companyName,
+      phone: formData.phone,
+      role: formData.role || 'owner',
+    });
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        toast.error(data.error || 'Signup failed');
-        setIsLoading(false);
-        return;
-      }
-
-      // Store access token
-      localStorage.setItem('fabricxai_token', data.session.access_token);
-
-      // Call parent signup handler
-      onSignup(data.user.email, data.user.role, data.user.fullName, data.user.companyName);
-      toast.success('Account created successfully! Welcome to FabricXAI!');
-    } catch (error) {
-      console.error('Signup error:', error);
-      toast.error('Signup failed. Please try again.');
+    if (error) {
+      toast.error(error);
       setIsLoading(false);
+      return;
     }
+    // Success: email confirmation sent. The auth handler shows the "check your
+    // inbox" screen / navigates. Keep the button disabled meanwhile.
   };
 
   const features = [

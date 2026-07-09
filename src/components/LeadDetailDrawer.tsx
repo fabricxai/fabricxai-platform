@@ -36,7 +36,7 @@ import { Badge } from './ui/badge';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from './ui/sheet';
 import { ScrollArea } from './ui/scroll-area';
 import { Progress } from './ui/progress';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 interface LeadDetailDrawerProps {
   isOpen: boolean;

@@ -1,4 +1,5 @@
-import marbimAILogo from "figma:asset/6b4cf6e4e338085095ecc8446ad35e7b17ea5cfe.png";
+// Real MARBIM mark shipped in /public/assets.
+const marbimAILogo = "/assets/marbim.svg";
 
 interface AskMarbimImageProps {
   size?: "sm" | "md" | "lg";

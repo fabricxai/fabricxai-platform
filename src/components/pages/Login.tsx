@@ -13,7 +13,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Checkbox } from "../ui/checkbox";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import {
   projectId,
   publicAnonKey,
@@ -22,12 +22,8 @@ import {
 import logoImage from "figma:asset/6b4cf6e4e338085095ecc8446ad35e7b17ea5cfe.png";
 
 interface LoginProps {
-  onLogin: (
-    email: string,
-    role: string,
-    name: string,
-    company: string,
-  ) => void;
+  /** Real Supabase sign-in. Resolves to an error message, or null on success. */
+  onLogin: (email: string, password: string) => Promise<string | null>;
   onNavigateToSignup: () => void;
 }
 
@@ -41,29 +37,16 @@ export function Login({
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleDemoMode = () => {
-    // Demo mode - bypass authentication
-    const demoUser = {
-      email: "demo@fabricxai.com",
-      role: "admin",
-      name: "Demo User",
-      company: "FabricXAI Demo Corp",
-    };
-
-    // Store demo session
-    localStorage.setItem("fabricxai_demo_mode", "true");
-    localStorage.setItem(
-      "fabricxai_user",
-      JSON.stringify(demoUser),
-    );
-
-    onLogin(
-      demoUser.email,
-      demoUser.role,
-      demoUser.name,
-      demoUser.company,
-    );
-    toast.success("Welcome to FabricXAI Demo Mode!");
+  const handleDemoMode = async () => {
+    // Signs into the seeded demo account (created by the seed script).
+    setIsLoading(true);
+    const error = await onLogin("demo@fabricxai.com", "demo1234");
+    if (error) {
+      toast.error("Demo account not available yet — please sign up.");
+      setIsLoading(false);
+      return;
+    }
+    toast.success("Welcome to the FabricXAI demo!");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -76,53 +59,14 @@ export function Login({
 
     setIsLoading(true);
 
-    try {
-      // Call Supabase login endpoint
-      const response = await fetch(
-        `${supabaseUrl}/functions/v1/make-server-1f923fcd/auth/login`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify({ email, password }),
-        },
-      );
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        // Show more helpful error message with hint
-        const errorMsg = data.error || "Invalid credentials";
-        const hint = data.hint || "Try using Demo Mode or sign up for a new account.";
-        toast.error(errorMsg);
-        if (hint) {
-          setTimeout(() => toast.info(hint), 500);
-        }
-        setIsLoading(false);
-        return;
-      }
-
-      // Store access token
-      localStorage.setItem(
-        "fabricxai_token",
-        data.session.access_token,
-      );
-
-      // Call parent login handler
-      onLogin(
-        data.user.email,
-        data.user.role,
-        data.user.fullName,
-        data.user.companyName,
-      );
-      toast.success("Welcome back to FabricXAI!");
-    } catch (error) {
-      console.error("Login error:", error);
-      toast.error("Login failed. Please try again.");
+    const error = await onLogin(email, password);
+    if (error) {
+      toast.error(error);
       setIsLoading(false);
+      return;
     }
+    // Success: the auth handler navigates to the app.
+    toast.success("Welcome back to FabricXAI!");
   };
 
   return (
@@ -168,7 +112,7 @@ export function Login({
             <div className="relative">
               <div className="w-14 h-14">
                 <img
-                  src={logoImage}
+                  src="/assets/fabricxai-logo-dark.png"
                   alt="fabricXai"
                   className="w-full h-full object-contain"
                 />
@@ -248,7 +192,7 @@ export function Login({
             <div className="lg:hidden flex items-center gap-3 mb-8">
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#57ACAF] to-[#EAB308] flex items-center justify-center shadow-lg shadow-[#57ACAF]/20 p-2">
                 <img
-                  src={logoImage}
+                  src="/assets/fabricxai-logo-dark.png"
                   alt="fabricXai"
                   className="w-full h-full object-contain"
                 />

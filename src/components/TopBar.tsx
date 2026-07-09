@@ -3,7 +3,6 @@ import newIconBefore from 'figma:asset/a8e2a19c1f1e7d9db4b3ab5b1f98e9c5a8dcd2be.
 import image_d6b7f80f7693c16e7001d9644e8e69a9830826a2 from 'figma:asset/d6b7f80f7693c16e7001d9644e8e69a9830826a2.png';
 import image_f72359dcb24a10e18b3ba63967c6fb99db2e7a10 from 'figma:asset/f72359dcb24a10e18b3ba63967c6fb99db2e7a10.png';
 import image_597a6f6fd0bc8e57b8ac3e371a8dbde74b6a3376 from 'figma:asset/597a6f6fd0bc8e57b8ac3e371a8dbde74b6a3376.png';
-import image_597a6f6fd0bc8e57b8ac3e371a8dbde74b6a3376 from 'figma:asset/597a6f6fd0bc8e57b8ac3e371a8dbde74b6a3376.png';
 import image_cf923d4a7d44d6033628185d429d82ed2e981dce from 'figma:asset/cf923d4a7d44d6033628185d429d82ed2e981dce.png';
 import image_6b4cf6e4e338085095ecc8446ad35e7b17ea5cfe from 'figma:asset/6b4cf6e4e338085095ecc8446ad35e7b17ea5cfe.png';
 import { 
