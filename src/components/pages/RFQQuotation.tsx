@@ -226,6 +226,7 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
   const [answerClarId, setAnswerClarId] = useState<string | null>(null);
   const [answerText, setAnswerText] = useState('');
   const [inboxFilter, setInboxFilter] = useState('all');
+  const [selectedQuote, setSelectedQuote] = useState<QuoteWithRfq | null>(null);
 
   const submitClarification = async () => {
     const res = await createClarification(newClarRfqId, newClarQuestion);
@@ -667,6 +668,7 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
         fob: `${q.currency} ${Number(q.fob_price).toFixed(2)}`,
         leadTime: q.lead_time_days ? `${q.lead_time_days}d` : '—',
         status: q.status.charAt(0).toUpperCase() + q.status.slice(1),
+        _quote: q,
       };
     });
     const draftCount = quotes.filter((q) => q.status === 'draft').length;
@@ -737,6 +739,7 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
             columns={cols}
             data={rows}
             loading={quotesLoading}
+            onRowClick={(row: any) => setSelectedQuote(row._quote)}
             emptyMessage="No quotes yet. Open an RFQ and click 'Draft quote with MARBIM' — the priced quote lands in your Approve inbox, then appears here."
             searchPlaceholder="Search quotes..."
           />
@@ -1037,6 +1040,105 @@ export function RFQQuotation({ initialSubPage = 'dashboard', onAskMarbim, onOpen
         onAskMarbim={onAskMarbim}
         rfqs={rfqs}
       />
+
+      {/* Quote detail slide-over */}
+      {selectedQuote && (() => {
+        const q = selectedQuote;
+        const lines = [
+          { label: 'Material', value: Number(q.material_cost) },
+          { label: 'Labor (CMT)', value: Number(q.labor_cost) },
+          { label: 'Overhead', value: Number(q.overhead_cost) },
+          { label: 'Freight', value: Number(q.freight_cost) },
+        ];
+        const total = lines.reduce((s, l) => s + l.value, 0);
+        const fmt = (n: number) => `${q.currency} ${n.toFixed(2)}`;
+        return (
+          <>
+            <div
+              className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+              onClick={() => setSelectedQuote(null)}
+            />
+            <div className="fixed right-0 top-0 z-50 h-full w-full max-w-md overflow-y-auto border-l border-white/10 bg-[#0F1420] p-6 shadow-2xl">
+              <div className="flex items-start justify-between mb-6">
+                <div className="min-w-0">
+                  <div className="text-xs text-[#6F83A7]">Quotation</div>
+                  <h3 className="text-white text-lg truncate">{q.rfq?.title ?? 'Quote'}</h3>
+                  <div className="text-sm text-[#6F83A7]">{q.rfq?.buyer?.company_name ?? '—'}</div>
+                </div>
+                <button
+                  onClick={() => setSelectedQuote(null)}
+                  className="text-[#6F83A7] hover:text-white p-1"
+                  aria-label="Close"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              <Badge
+                className={
+                  q.status === 'accepted'
+                    ? 'bg-[#57ACAF]/15 text-[#57ACAF] mb-6'
+                    : q.status === 'sent'
+                      ? 'bg-[#EAB308]/15 text-[#EAB308] mb-6'
+                      : q.status === 'rejected'
+                        ? 'bg-[#D0342C]/15 text-[#D0342C] mb-6'
+                        : 'bg-[#6F83A7]/15 text-[#6F83A7] mb-6'
+                }
+              >
+                {q.status.charAt(0).toUpperCase() + q.status.slice(1)}
+              </Badge>
+
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5 mb-4">
+                <h4 className="text-white mb-3 text-sm">Cost breakdown (per unit)</h4>
+                <div className="space-y-2">
+                  {lines.map((l) => (
+                    <div key={l.label} className="flex justify-between text-sm">
+                      <span className="text-[#6F83A7]">{l.label}</span>
+                      <span className="text-white">{fmt(l.value)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between text-sm border-t border-white/10 pt-2">
+                    <span className="text-[#6F83A7]">Total cost</span>
+                    <span className="text-white">{fmt(total)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[#6F83A7]">Margin</span>
+                    <span className="text-white">{Number(q.margin_pct)}%</span>
+                  </div>
+                  <div className="flex justify-between items-center border-t border-white/10 pt-3 mt-1">
+                    <span className="text-white font-medium">FOB Price</span>
+                    <span className="text-xl font-semibold text-[#57ACAF]">{fmt(Number(q.fob_price))}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+                  <div className="text-xs text-[#6F83A7]">Lead time</div>
+                  <div className="text-white">{q.lead_time_days ? `${q.lead_time_days} days` : '—'}</div>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+                  <div className="text-xs text-[#6F83A7]">MOQ</div>
+                  <div className="text-white">{q.moq ? q.moq.toLocaleString() : '—'}</div>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+                  <div className="text-xs text-[#6F83A7]">Version</div>
+                  <div className="text-white">v{q.version}</div>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+                  <div className="text-xs text-[#6F83A7]">Source</div>
+                  <div className="text-white capitalize">{q.source}</div>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2 rounded-lg border border-[#57ACAF]/20 bg-[#57ACAF]/5 px-3 py-2 text-xs text-[#6F83A7]">
+                <Sparkles className="mt-0.5 h-3.5 w-3.5 text-[#57ACAF] shrink-0" />
+                <span>FOB = (Material + Labor + Overhead + Freight) ÷ (1 − Margin%). The engine computes it — not a guess.</span>
+              </div>
+            </div>
+          </>
+        );
+      })()}
     </>
   );
 }
