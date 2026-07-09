@@ -1,0 +1,57 @@
+# Deploy — Vercel + GitHub
+
+Hosting: **Vercel** (native Next.js, no Docker). Source: **github.com/fabricxai/fabricxai-platform**.
+Data/auth stays on **managed Supabase** (`aqnrnbdnhekkbimaoewp`). Domain: **platform.fabricxai.com**.
+
+Deploys are automatic: every push to `main` ships to production; every PR gets a preview URL.
+
+## One-time setup
+
+### 1. Import the repo
+1. vercel.com → **Add New… → Project** → import `fabricxai/fabricxai-platform`.
+2. Framework preset auto-detects **Next.js**. Leave Build Command / Output as default
+   (do NOT set them — the old Vite `vercel.json` was deleted for this reason).
+
+### 2. Environment variables
+Add these in **Project → Settings → Environment Variables** (tick Production + Preview +
+Development). Values come from your `.env.local`.
+
+| Key | Scope | Notes |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | public | `https://aqnrnbdnhekkbimaoewp.supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | public | anon key |
+| `NEXT_PUBLIC_SUPABASE_PROJECT_ID` | public | `aqnrnbdnhekkbimaoewp` |
+| `SUPABASE_SERVICE_ROLE_KEY` | **server-only** | never prefix NEXT_PUBLIC_ |
+| `ANTHROPIC_API_KEY` | **server-only** | reasoning / quotes |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | **server-only** | Gemini extraction |
+| `OPENAI_API_KEY` | **server-only** | embeddings |
+| `NEXT_PUBLIC_APP_URL` | public | **`https://platform.fabricxai.com`** (prod) — drives auth email redirects |
+| `NEXT_PUBLIC_APP_NAME` | public | `fabricXai` |
+
+> The 4 server-only keys must NOT have the `NEXT_PUBLIC_` prefix or they leak into the browser bundle.
+
+### 3. Domain
+1. Vercel → **Project → Settings → Domains** → add `platform.fabricxai.com`.
+2. Point DNS as Vercel instructs (CNAME → `cname.vercel-dns.com`, or A record).
+3. Confirm `NEXT_PUBLIC_APP_URL` = `https://platform.fabricxai.com` in Production env.
+
+### 4. Supabase auth URLs (so email confirmation redirects work)
+Supabase Dashboard → **Authentication → URL Configuration**:
+- **Site URL:** `https://platform.fabricxai.com`
+- **Redirect URLs:** add
+  - `https://platform.fabricxai.com/**`
+  - `https://*.vercel.app/**`  (so preview deployments can log in)
+  - `http://localhost:3000/**` (local dev)
+- **Authentication → Providers → Email → Confirm email = ON**.
+
+### 5. First deploy
+Push to `main` (or click Deploy). Vercel runs `next build` — already verified green locally.
+Type errors are skipped at build (`typescript.ignoreBuildErrors`, temporary — see PROGRESS.md).
+
+## Notes
+- No `vercel.json` needed; Vercel auto-detects Next.js. (A typed `vercel.ts` can be added later
+  for crons/rewrites if wanted.)
+- API routes (`/api/agent/chat`, `/api/extract/rfq`, `/api/rfq/draft-quote`) and server actions
+  run as Vercel Functions automatically — nothing to configure.
+- Before real traffic: replace Supabase's default auth SMTP (≈3–4 emails/hr) with a real SMTP
+  provider in Supabase → Authentication → Emails.

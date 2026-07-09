@@ -7,7 +7,6 @@ const nextConfig: NextConfig = {
   // They are cleaned per-wave as each module is wired to real data. Until then we
   // don't let them block production builds. Remove once the per-module cleanup is done.
   typescript: { ignoreBuildErrors: true },
-  eslint: { ignoreDuringBuilds: true },
   webpack(config) {
     const figmaAssets: Record<string, string> = {
       'f72359dcb24a10e18b3ba63967c6fb99db2e7a10': 'f72359dcb24a10e18b3ba63967c6fb99db2e7a10',
