@@ -454,27 +454,45 @@ export function AIAssistantPanel({ isOpen, onClose, initialPrompt, currentModule
       processingSteps: ['Analyzing query...', 'Searching knowledge base...', 'Generating insights...']
     }]);
 
-    // Simulate AI processing with optional vector database context
-    let context: string | null = null;
-    
-    try {
-      // Try to get context from vector database (optional enhancement)
-      const { getAIContext } = await import('../utils/supabase/vector_store');
-      context = await getAIContext(userQuery, currentModule);
-    } catch (error) {
-      // Silently fail - vector DB is optional enhancement
-      // AI will work without it using mock data
-    }
+    // Real MARBIM response — Claude reasoning grounded in the company's data.
+    const history = [...messages, userMessage]
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .map((m) => ({ role: m.role, content: m.content }));
 
-    // Generate response after processing delay
-    setTimeout(() => {
-      // Remove processing message
+    try {
+      const res = await fetch('/api/agent/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: history, module: currentModule }),
+      });
+      const json = await res.json();
       setMessages(prev => prev.filter(msg => msg.id !== processingMessageId));
-      
-      const aiMessage = generateEnhancedResponse(userQuery, currentModule, context);
-      setMessages(prev => [...prev, aiMessage]);
+      if (!res.ok) {
+        setMessages(prev => [...prev, {
+          id: (Date.now() + 2).toString(),
+          role: 'assistant',
+          content: json.error || 'MARBIM had trouble responding. Please try again.',
+          timestamp: new Date(),
+        }]);
+      } else {
+        setMessages(prev => [...prev, {
+          id: (Date.now() + 2).toString(),
+          role: 'assistant',
+          content: json.text || 'I could not find anything to say about that yet.',
+          timestamp: new Date(),
+        }]);
+      }
+    } catch {
+      setMessages(prev => prev.filter(msg => msg.id !== processingMessageId));
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 2).toString(),
+        role: 'assistant',
+        content: 'I could not reach the server. Please check your connection and try again.',
+        timestamp: new Date(),
+      }]);
+    } finally {
       setIsTyping(false);
-    }, 2000);
+    }
   };
 
   const handleQuickPrompt = (prompt: string) => {
